@@ -1,25 +1,13 @@
 {
-  "versao": "FC Constroi v2 - Nacional + Local",
-  "manychat": {
-    "keywords_nacional": ["PORCELANATO", "CURSO", "AULA", "BANCA", "COLA", "TRAÇO"],
-    "keywords_local": ["ORÇAMENTO", "SANTANÓPOLIS", "IRARÁ", "FEIRA", "VISITA", "FAZ AQUI"],
-    "fluxo_nacional": "Responde comentário + DM Link Kiwify + Tag kiwify_lead",
-    "fluxo_local": "Responde comentário + DM Pergunta Cidade + Tag local_santanopolis + Link Zap"
+  "CIDADES_QUE_ATENDEMOS": ["santanopolis", "irara", "feira de santana", "agua fria", "serrinha", "santa barbara"],
+  "CURSO_ONLINE": {
+    "palavras_gatilho": ["gaveta", "closet", "porcelanato", "bancada", "argamassa"],
+    "resposta": "Ensino gaveta, closet, bancada e porcelanato na Aula 02 do Curso Online. Libera aqui: https://pay.kiwify.com.br/HiEJZtF?src=instagram&kw=curso"
   },
-  "n8n_workflows": {
-    "wf1_kiwify_venda": "Kiwify Webhook Nova Venda -> Evolution API msg Boas Vindas -> Google Sheet vendas -> Email Klicksend",
-    "wf2_local_orcamento": "WhatsApp Evolution Trigger Foto -> Salva Drive -> Calcula m2*45 -> Gera PDF com python -> Envia PDF -> Aguarda 2h -> Follow-up",
-    "wf3_agendamento": "Google Calendar Trigger -> 1h antes envia Zap confirmação + localização"
+  "ORCAMENTO_LOCAL_VALIDO": {
+    "resposta": "Atendemos sim! Me chama no Whats com Bairro + m² + foto: wa.me/5575999999999?text=ORCAMENTO_{cidade}"
   },
-  "bot_whatsapp_fluxo": {
-    "mensagem1": "Oi! FC Constroi aqui 👷‍♂️ Me manda: 1-Foto 2-Metragem 3-Sua cidade",
-    "mensagem2": "Tipo de serviço? Digite: 1-Chão 2-Parede 3-Banheiro Completo 4-Curso Online",
-    "mensagem3_orcamento": "Pré-orçamento: {m2}m² x R$45 = R$ {total} mão de obra. Quer visita técnica GRÁTIS amanhã?",
-    "mensagem3_curso": "Perfeito! Curso Porcelanato do Zero ao Avançado por R$97 aqui: {link_kiwify}"
-  },
-  "email_automacao": {
-    "ferramenta": "Kiwify Email + Resend",
-    "sequencia_nacional": ["Acesso", "Erro Cola", "Case Aluno", "Escassez", "Carrinho Abandonado"],
-    "sequencia_local": ["Orçamento Enviado", "Lembrete Visita", "Prova Social Obra Vizinho", "Última Chance"]
+  "ORCAMENTO_FORA_DA_AREA": {
+    "resposta": "Irmão, hoje a gente NÃO atende {cidade} com obra presencial, só Santanópolis, Irará, Feira, Água Fria, Serrinha e Santa Bárbara. MAS como exceção, te ofereço meu Curso Online onde ensino gaveta, closet, bancada e porcelanato com a mesma técnica. Quer o link com desconto? https://pay.kiwify.com.br/HiEJZtF?src=instagram&kw=fora_area_{cidade}"
   }
 }

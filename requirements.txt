@@ -1,2 +1,13 @@
 streamlit
 pandas
+numpy
+pillow
+requests
+openpyxl
+scikit-learn
+matplotlib
+seaborn
+plotly
+python-dotenv
+openai
+google-generativeai
