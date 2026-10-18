@@ -1,0 +1,17 @@
+# FLUXOGRAMA MESTRE FC CONSTROI - 2 FUNIS SEPARADOS POR PALAVRA
+
+Isso resolve sua confusão de lead nacional vs local.
+
+PALAVRAS-CHAVE QUE SEPARAM:
+
+NACIONAL -> KIWIFY:
+PORCELANATO, CURSO, AULA, BANCA, COLA, TRAÇO, NIVELAMENTO
+
+LOCAL -> ORÇAMENTO:
+ORÇAMENTO, SANTANÓPOLIS, IRARÁ, FEIRA, VISITA, QUANTO COBRA, FAZ NA MINHA CASA
+
+REGRA NO MANYCHAT:
+IF comentário contém ORÇAMENTO/SANTANÓPOLIS/FEIRA -> Fluxo Local
+ELSE -> Fluxo Kiwify Nacional
+
+BENEFÍCIO: Não perde lead. Quem é de longe compra curso, quem é de perto vira cliente de obra de alto ticket.

@@ -1,0 +1,25 @@
+# FUNIL LOCAL - ORÇAMENTOS SANTANÓPOLIS / FEIRA / BA
+
+## PRODUTO: Orçamento Presencial + Serviço R$1.500 a R$12.000
+
+### FLUXO LOCAL ORGÂNICO
+[REEL Obra em Santanópolis] CTA: "Mora em Santanópolis ou região? Comenta ORÇAMENTO"
+  ↓
+Manychat: Filtro Local -> Pergunta: "Qual bairro/cidade?"
+  Se for Santanópolis / Irará / Feira / Ouriçangas / Pedrão -> 
+  DM: "Manda 3 fotos + metragem no Zap, te mando orçamento em 2h" + Botão Zap
+  Se for fora -> Joga pro Funil Kiwify (curso)
+
+### FLUXO BOT WHATSAPP ORÇAMENTO (Evolution API + n8n)
+1. Cliente clica Zap -> Mensagem Auto:
+"Oi, aqui é da FC Constroi 👷‍♂️ Me manda: 1-Foto do local 2-Metragem 3-Cidade"
+2. n8n recebe foto -> Salva no Drive /orcamentos_entrada
+3. Bot: "Qual tipo? (1) Chão (2) Parede (3) Banheiro completo"
+4. Calcula automático: metragem x R$45 (mão de obra) + material = Pré-orçamento
+5. Envia PDF automático com `reports/modelo_orcamento.pdf`
+6. Bot agenda visita: "Quer agendar visita técnica amanhã 9h ou 14h?"
+
+Conversão Local: 40% enviam foto -> 60% desses fecham visita -> 70% fecham obra
+
+### AUTOMAÇÃO DE COMBITE (Lembrete)
+n8n: Se marcou visita e não respondeu 1h antes -> Zap: "Confirmado hoje 14h em [Endereço]?"

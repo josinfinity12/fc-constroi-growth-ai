@@ -1,0 +1,28 @@
+# FUNIL KIWIFY - PORCELANATO DO ZERO AO AVANÇADO (Brasil Todo)
+
+## PRODUTO: R$ 97 a R$ 197
+Plataforma: Kiwify + Área de Membros
+
+### FLUXO NACIONAL ORGÂNICO (IG 270k + YT 18.3k)
+[REEL DICA TÉCNICA: Como cortar porcelanato sem estourar]
+  ↓ CTA: "Comenta PORCELANATO que te mando a aula 1 grátis"
+[Manychat detecta] -> DM com Link Kiwify Checkout + Cupom PORCELANATO10
+  ↓
+CHECKOUT KIWIFY -> Webhook -> n8n -> 
+    1. Libera acesso
+    2. Manda pra Evolution API (Boas vindas + Link)
+    3. Adiciona no Email (Sequência 7 dias)
+    4. Adiciona no Google Sheet (vendas_nacional)
+
+### FLUXO PAGO NACIONAL - META ADS
+Campanha CBO R$80/dia - Vídeo Obra Antes/Depois
+Destino: Página Kiwify com VSL de 3 min + Depoimentos
+Order Bump: Planilha de Cálculo de Material + Lista de Ferramentas (R$27)
+Upsell: Mentoria 1:1 FC Constroi (R$497) - Pós compra Kiwify
+
+Sequência Email Kiwify (7 dias):
+Dia 1: Acesso liberado + Bônus
+Dia 2: Erro que faz perder R$500 em cola
+Dia 3: Case Aluno que faturou R$5k
+Dia 5: Último dia preço R$97 (escassez)
+Dia 7: Carrinho abandonado -> Cupom 15%
