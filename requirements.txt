@@ -1,0 +1,7 @@
+streamlit
+pandas
+scikit-learn
+openai
+yt-dlp
+moviepy
+python-dotenv

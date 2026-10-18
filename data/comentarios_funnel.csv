@@ -1,0 +1,5 @@
+data,id_comentario,comentario,classificacao,link_produto,resposta_automatica,status
+2026-10-18,01,"qual traço usou?",duvida_tecnica,link argamassa,"Traço 3x1 que ensino no eBook pag 12. Quer o link? Comenta EU QUERO",pendente
+2026-10-18,02,"qual cola?",duvida_tecnica,link cola piso,"Usei AC3 da Quartzolit. Tenho cupom, comenta COLA que te mando no DM",pendente
+2026-10-18,03,"faz no Rio?",intencao_compra,link mentoria,"Faço consultoria online pro RJ sim. Me chama no Whats? Comenta RJ",convertido
+2026-10-18,04,"quanto cobra?",intencao_compra,link orçamento,"Depende do m². Comenta ORÇAMENTO que te mando a tabela no DM",pendente
