@@ -1,177 +1,309 @@
-# dashboard.py - v3.1.8 COMPLETO - FC CONSTRÓI GROWTH AI - SEM MODS QUEBRADOS
+# designer.py - FC CONSTRÓI • GROWTH AI v3.1.5 - COMPLETO SEM REMOVER NADA
 import streamlit as st
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
-import plotly.express as px
-import plotly.graph_objects as go
+from PIL import Image
+import base64
+import io
 
-# Imports do design
-from designer import aplicar_design, mostrar_header_com_logo, mostrar_footer, CORES_FC
-
-# Configuração da página
-st.set_page_config(
-    page_title="FC CONSTRÓI • Growth AI",
-    page_icon="🏗️",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
-aplicar_design()
-mostrar_header_com_logo()
-
-# Fuso Bahia
-fuso_bahia = pytz.timezone('America/Bahia')
-agora = datetime.now(fuso_bahia)
-
-# ==================== DADOS MOCKADOS (substitua pelo seu banco) ====================
-@st.cache_data
-def carregar_dados():
-    datas = [agora - timedelta(days=x) for x in range(30, -1, -1)]
-    return pd.DataFrame({
-        'data': datas,
-        'vendas': np.random.randint(800, 3500, 31),
-        'leads': np.random.randint(5, 25, 31),
-        'investimento': np.random.randint(100, 600, 31),
-        'roas': np.random.uniform(1.8, 4.5, 31)
-    })
-
-df = carregar_dados()
-
-# ==================== SIDEBAR ====================
-with st.sidebar:
-    st.markdown("### ⚙️ Filtros")
-    periodo = st.selectbox("Período", ["Últimos 7 dias", "Últimos 15 dias", "Últimos 30 dias", "Mês atual"])
-    canal = st.multiselect("Canal", ["Instagram", "Google", "WhatsApp", "Loja"], default=["Instagram", "Google"])
-    st.divider()
-    st.caption(f"Atualizado: {agora.strftime('%d/%m/%Y %H:%M')}")
-
-# ==================== ABAS PRINCIPAIS ====================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📊 Visão Geral", 
-    "💰 CAC / ROAS", 
-    "💵 Investimentos", 
-    "🏗️ Porcelanato", 
-    "📄 Relatórios"
-])
-
-# --- ABA 1: VISÃO GERAL ---
-with tab1:
-    st.markdown("#### 📈 Performance Geral")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    total_vendas = df['vendas'].sum()
-    total_leads = df['leads'].sum()
-    total_invest = df['investimento'].sum()
-    roas_medio = total_vendas / total_invest if total_invest > 0 else 0
-    
-    col1.metric("💰 Vendas", f"R$ {total_vendas:,.0f}", f"{df['vendas'].iloc[-1] - df['vendas'].iloc[-2]:+}")
-    col2.metric("👥 Leads", f"{total_leads}", f"{df['leads'].iloc[-1] - df['leads'].iloc[-2]:+}")
-    col3.metric("📢 Investido", f"R$ {total_invest:,.0f}")
-    col4.metric("🚀 ROAS Médio", f"{roas_medio:.2f}x", f"{df['roas'].iloc[-1] - df['roas'].iloc[-2]:+.2f}")
-    
-    st.divider()
-    
-    col_graf1, col_graf2 = st.columns(2)
-    
-    with col_graf1:
-        st.markdown("**Vendas últimos 30 dias**")
-        fig = px.line(df, x='data', y='vendas', template="plotly_white")
-        fig.update_traces(line_color=CORES_FC['laranja_principal'])
-        fig.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10))
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col_graf2:
-        st.markdown("**ROAS por dia**")
-        fig2 = px.bar(df, x='data', y='roas', template="plotly_white")
-        fig2.update_traces(marker_color=CORES_FC['preto_header'])
-        fig2.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10))
-        st.plotly_chart(fig2, use_container_width=True)
-
-# --- ABA 2: CAC / ROAS (FIX GRÁFICO NÃO SOME) ---
-with tab2:
-    st.markdown("#### 💰 Calculadora CAC / ROAS - FIX")
-    
-    c1, c2 = st.columns([1, 2])
-    
-    with c1:
-        st.markdown("**Insira os valores:**")
-        investimento = st.number_input("Investimento em Ads (R$)", min_value=0.0, value=1000.0, step=50.0, key="inv_roas")
-        faturamento = st.number_input("Faturamento Gerado (R$)", min_value=0.0, value=3500.0, step=100.0, key="fat_roas")
-        num_clientes = st.number_input("Nº de Clientes", min_value=1, value=12, step=1, key="cli_roas")
+# ===================================================================
+# 1. FUNÇÃO PRINCIPAL - APLICAR DESIGN GLOBAL - CORES ANTERIORES PRESERVADAS
+# ===================================================================
+def aplicar_design():
+    st.markdown("""
+    <style>
+        /* ============================================ */
+        /* TIPOGRAFIA GLOBAL - ARIAL LEGÍVEL */
+        /* ============================================ */
+        html, body, [class*="css"], .stApp, p, div, span, h1, h2, h3, h4, h5, h6, 
+        button, input, textarea, select, label {
+            font-family: Arial, Helvetica, sans-serif !important;
+        }
         
-        calcular = st.button("🧮 Calcular", type="primary", use_container_width=True, key="btn_calc_roas")
-    
-    with c2:
-        if calcular:
-            roas = faturamento / investimento if investimento > 0 else 0
-            cac = investimento / num_clientes if num_clientes > 0 else 0
-            lucro = faturamento - investimento
-            
-            mc1, mc2, mc3 = st.columns(3)
-            mc1.metric("ROAS", f"{roas:.2f}x")
-            mc2.metric("CAC", f"R$ {cac:.2f}")
-            mc3.metric("Lucro", f"R$ {lucro:.2f}")
-            
-            # Gráfico FIXO - usa session_state pra não sumir
-            if 'grafico_roas' not in st.session_state:
-                st.session_state.grafico_roas = None
-            
-            fig_roas = go.Figure()
-            fig_roas.add_trace(go.Bar(name='Investimento', x=['Resultado'], y=[investimento], marker_color='#111827'))
-            fig_roas.add_trace(go.Bar(name='Faturamento', x=['Resultado'], y=[faturamento], marker_color='#FF6B00'))
-            fig_roas.update_layout(barmode='group', height=300, template="plotly_white")
-            st.plotly_chart(fig_roas, use_container_width=True, key="chart_roas_fixo")
-            
-            st.session_state.grafico_roas = fig_roas
-        else:
-            st.info("👈 Preencha os valores e clique em Calcular. O gráfico ficará fixo após calcular.")
+        /* App background */
+        .stApp { 
+            background-color: #FFFFFF !important; 
+            background: #FFFFFF !important;
+        }
+        
+        /* ============================================ */
+        /* HEADER PRETO COM DETALHE LARANJA - PRESERVADO */
+        /* ============================================ */
+        .fc-header {
+            background: #111827 !important;
+            background-color: #111827 !important;
+            padding: 20px 26px !important;
+            border-radius: 12px !important;
+            margin-bottom: 24px !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+            gap: 16px !important;
+            border-left: 6px solid #FF6B00 !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        }
+        .fc-header h1 { 
+            color: #FFFFFF !important; 
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 23px !important; 
+            font-weight: 800 !important;
+            letter-spacing: 0.3px !important;
+            margin: 0 !important;
+        }
+        .fc-header p { 
+            color: #D1D5DB !important; 
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 12.5px !important; 
+            margin: 6px 0 0 0 !important;
+            font-weight: 400 !important;
+        }
+        
+        /* ============================================ */
+        /* RELÓGIO - AGORA BRANCO + ARIAL + LEGÍVEL */
+        /* ============================================ */
+        .fc-clock, .fc-clock * {
+            color: #FFFFFF !important;
+            background-color: #1F2937 !important;
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 14px !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.5px !important;
+            line-height: 1.5 !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+        }
+        .fc-clock {
+            padding: 12px 20px !important;
+            border-radius: 10px !important;
+            border: 1px solid #374151 !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+        }
+        
+        /* ============================================ */
+        /* METRICS - CARDS BRANCOS COM BORDA */
+        /* ============================================ */
+        [data-testid="stMetric"] {
+            background: #F9FAFB !important;
+            background-color: #F9FAFB !important;
+            border: 1px solid #E5E7EB !important;
+            border-radius: 10px !important;
+            padding: 14px !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 13px !important;
+            color: #6B7280 !important;
+        }
+        [data-testid="stMetricValue"] {
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 22px !important;
+            font-weight: 700 !important;
+            color: #111827 !important;
+        }
+        
+        /* ============================================ */
+        /* TABS - LARANJA QUANDO ATIVA */
+        /* ============================================ */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px !important;
+            background-color: #F9FAFB !important;
+            padding: 6px !important;
+            border-radius: 10px !important;
+        }
+        .stTabs [data-baseweb="tab"] {
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 13px !important;
+            font-weight: 500 !important;
+            color: #6B7280 !important;
+            border-radius: 8px !important;
+            padding: 8px 16px !important;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #FF6B00 !important;
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
+        }
+        
+        /* ============================================ */
+        /* BOTÕES - LARANJA FC */
+        /* ============================================ */
+        .stButton > button[kind="primary"] {
+            background-color: #FF6B00 !important;
+            color: white !important;
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-weight: 700 !important;
+            border-radius: 8px !important;
+            border: none !important;
+            padding: 10px 20px !important;
+        }
+        .stButton > button {
+            font-family: Arial, Helvetica, sans-serif !important;
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+        }
+        
+        /* ============================================ */
+        /* SIDEBAR - BRANCO LIMPO */
+        /* ============================================ */
+        [data-testid="stSidebar"] {
+            background-color: #FFFFFF !important;
+            border-right: 1px solid #E5E7EB !important;
+        }
+        [data-testid="stSidebar"] * {
+            font-family: Arial, Helvetica, sans-serif !important;
+        }
+        
+        /* ============================================ */
+        /* INPUTS E SELECTS */
+        /* ============================================ */
+        .stTextInput > div > div > input,
+        .stTextArea > div > div > textarea,
+        .stNumberInput > div > div > input,
+        .stSelectbox > div > div > div {
+            font-family: Arial, Helvetica, sans-serif !important;
+            border-radius: 8px !important;
+            border: 1px solid #D1D5DB !important;
+        }
+        
+        /* ============================================ */
+        /* DATAFRAMES */
+        /* ============================================ */
+        [data-testid="stDataFrame"] {
+            border: 1px solid #E5E7EB !important;
+            border-radius: 10px !important;
+        }
+        
+        /* ============================================ */
+        /* PROGRESS BAR LARANJA */
+        /* ============================================ */
+        .stProgress > div > div > div > div {
+            background-color: #FF6B00 !important;
+        }
+        
+        /* ============================================ */
+        /* UPLOADER */
+        /* ============================================ */
+        [data-testid="stFileUploader"] {
+            border: 1px dashed #D1D5DB !important;
+            border-radius: 10px !important;
+            background: #F9FAFB !important;
+        }
+        
+        /* FOOTER */
+        .fc-footer {
+            text-align: center !important;
+            color: #9CA3AF !important;
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 11px !important;
+            margin-top: 50px !important;
+            padding-top: 20px !important;
+            border-top: 1px solid #E5E7EB !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- ABA 3: INVESTIMENTOS ---
-with tab3:
-    st.markdown("#### 💵 Controle de Investimentos")
+# ===================================================================
+# 2. HEADER COM LOGO + RELÓGIO BRANCO ARIAL - ATUALIZADO
+# ===================================================================
+def mostrar_header_com_logo():
+    fuso_bahia = pytz.timezone('America/Bahia')
+    agora = datetime.now(fuso_bahia)
+    
+    dias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+    meses = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+    
+    dia_semana = dias[agora.weekday()]
+    data_str = f"{dia_semana}, {agora.day} de {meses[agora.month]} de {agora.year}"
+    hora_str = agora.strftime("%H:%M:%S")
+    
+    # Logo opcional - tenta carregar se existir
+    logo_html = ""
     try:
-        from scripts.investimentos import render_investimentos
-        render_investimentos()
-    except ImportError:
-        st.warning("Arquivo `scripts/investimentos.py` não encontrado. Criando controle básico:")
-        
-        # Controle básico caso não tenha o arquivo
-        with st.form("form_invest"):
-            col_a, col_b, col_c = st.columns(3)
-            col_a.date_input("Data", value=agora.date())
-            col_a.selectbox("Plataforma", ["Meta Ads", "Google Ads", "TikTok Ads"])
-            col_b.number_input("Valor Investido", min_value=0.0, value=150.0)
-            col_b.selectbox("Campanha", ["Porcelanato", "Pisos", "Geral"])
-            col_c.text_area("Obs")
-            st.form_submit_button("Salvar Investimento")
-        
-        st.dataframe(df[['data', 'investimento']].tail(10), use_container_width=True)
-
-# --- ABA 4: PORCELANATO ---
-with tab4:
-    st.markdown("#### 🏗️ Inteligência Porcelanato")
-    col_p1, col_p2 = st.columns(2)
-    col_p1.metric("Ticket Médio Porcelanato", "R$ 1.850", "+12%")
-    col_p2.metric("Mais Vendido", "Polido 80x80", "32 vendas")
+        # Se tiver logo.png na pasta, mostra
+        logo = Image.open("logo.png")
+        buffered = io.BytesIO()
+        logo.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        logo_html = f'<img src="data:image/png;base64,{img_str}" style="height:38px; margin-right:12px; border-radius:6px;">'
+    except:
+        logo_html = "🏗️"
     
-    st.markdown("**Produtos em destaque:**")
-    produtos = pd.DataFrame({
-        "Produto": ["Porcelanato Polido 80x80", "Porcelanato Acetinado 60x60", "Piso Vinílico", "Revestimento 3D"],
-        "Vendas": [32, 28, 15, 9],
-        "Estoque": [120, 80, 45, 20]
-    })
-    st.dataframe(produtos, use_container_width=True)
+    st.markdown(f"""
+    <div class="fc-header">
+        <div style="display:flex; align-items:center;">
+            <div style="font-size:32px; margin-right:12px;">{logo_html}</div>
+            <div>
+                <h1 style="font-family: Arial, Helvetica, sans-serif !important; color: #FFFFFF !important;">FC CONSTRÓI • GROWTH AI v3.1.5</h1>
+                <p style="font-family: Arial, Helvetica, sans-serif !important; color: #D1D5DB !important;">Construção • Porcelanato • Inteligência de Vendas • Irará/BA</p>
+            </div>
+        </div>
+        <div class="fc-clock" style="font-family: Arial, Helvetica, sans-serif !important; color: #FFFFFF !important; background: #1F2937 !important;">
+            <span style="color: #FFFFFF !important; font-family: Arial, Helvetica, sans-serif !important; font-size:14px;">
+                📅 {data_str} &nbsp;•&nbsp; ⏰ {hora_str}
+            </span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# --- ABA 5: RELATÓRIOS ---
-with tab5:
-    st.markdown("#### 📄 Relatórios")
-    st.download_button("📥 Baixar CSV Vendas", df.to_csv(index=False), "vendas_fc.csv", "text/csv")
-    st.dataframe(df, use_container_width=True)
+# ===================================================================
+# 3. FUNÇÕES EXTRAS PRESERVADAS - NÃO REMOVIDAS
+# ===================================================================
+def mostrar_footer():
+    fuso = pytz.timezone('America/Bahia')
+    agora = datetime.now(fuso)
+    st.markdown(f"""
+    <div class="fc-footer">
+        FC CONSTRÓI © {agora.year} • {agora.strftime('%d/%m/%Y %H:%M:%S')} - Irará/BA<br>
+        GROWTH AI v3.1.5 • Arial Legível • Branco Cinza Claro • Cores Anteriores Preservadas
+    </div>
+    """, unsafe_allow_html=True)
 
-mostrar_footer()
+def criar_card_metrica(titulo, valor, delta=None):
+    """Card de métrica preservado"""
+    if delta:
+        st.metric(titulo, valor, delta)
+    else:
+        st.metric(titulo, valor)
 
+def aplicar_estilo_tabela():
+    """Estilo extra para tabelas - preservado"""
+    st.markdown("""
+    <style>
+        table { font-family: Arial, Helvetica, sans-serif !important; }
+        th { background: #F9FAFB !important; color: #111827 !important; font-weight:700 !important; }
+        td { font-family: Arial, Helvetica, sans-serif !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+def mostrar_alerta_sucesso(msg):
+    st.success(f"✅ {msg}")
+
+def mostrar_alerta_erro(msg):
+    st.error(f"❌ {msg}")
+
+def mostrar_alerta_aviso(msg):
+    st.warning(f"⚠️ {msg}")
+
+# ===================================================================
+# 4. CONFIGURAÇÃO DE CORES PADRÃO FC - PRESERVADAS
+# ===================================================================
+CORES_FC = {
+    "laranja_principal": "#FF6B00",
+    "preto_header": "#111827",
+    "cinza_escuro": "#1F2937",
+    "cinza_borda": "#374151",
+    "branco": "#FFFFFF",
+    "cinza_claro": "#F9FAFB",
+    "cinza_texto": "#6B7280",
+    "cinza_claro_texto": "#D1D5DB",
+    "branco_puro": "#F9FAFB",
+    "verde_sucesso": "#10B981",
+    "vermelho_erro": "#EF4444",
+    "azul_info": "#3B82F6"
+}
+
+def get_cores():
+    return CORES_FC
 
 
