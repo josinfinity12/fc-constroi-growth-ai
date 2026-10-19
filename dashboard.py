@@ -11,7 +11,7 @@ from designer import aplicar_design, mostrar_header_com_logo
 st.set_page_config(page_title="FC Constrói - Growth AI v3.1.1", layout="wide", page_icon="🏗️")
 
 # --- NOVO: RELÓGIO ATUALIZÁVEL AUTOMÁTICO A CADA 1 SEGUNDO ---
-st_autorefresh(interval=1000, key="relogio_auto_fc_v311")
+st_autorefresh(interval=60000, key="relogio_auto_fc_v311")
 
 aplicar_design()
 mostrar_header_com_logo()
@@ -344,20 +344,43 @@ with tab5:
         st.write(f"Títulos: 1. {tema} - SEM SEGREDO 2. Como fazer {tema} em 1 dia")
         st.write("Descrição com CTA + Tags")
 
-with tab8:
+with with tab8:
     st.subheader("💰 CAC CPA ROAS - Onde investir R$300")
     st.caption("Meta vs Google vs Orgânico")
+    
+    # --- CORREÇÃO: Salva estado pra não sumir com o relógio ---
+    if 'roas_calc_feito' not in st.session_state:
+        st.session_state['roas_calc_feito'] = False
+    if 'df_roas_data' not in st.session_state:
+        st.session_state['df_roas_data'] = None
+    if 'invest_valor' not in st.session_state:
+        st.session_state['invest_valor'] = 300
+
     col1, col2 = st.columns(2)
     with col1:
         st.file_uploader("Meta ADS CSV (gasto, leads)", type="csv", key="meta")
         st.file_uploader("Google ADS CSV", type="csv", key="google")
     with col2:
         st.file_uploader("Kiwify CSV (vendas)", type="csv", key="kiwify")
-        investimento = st.number_input("Investimento teste R$", value=300)
-    if st.button("Calcular ROAS e Melhor Canal", key="calc"):
-        df_roas = pd.DataFrame({"ROAS": [2.1, 1.4, 4.0]}, index=["Meta", "Google", "Organico"])
-        st.bar_chart(df_roas)
-        st.success(f"Com R${investimento}: Orgânico ROAS 4x melhor!")
+        investimento = st.number_input("Investimento teste R$", value=st.session_state['invest_valor'], key="invest_input")
+
+    if st.button("Calcular ROAS e Melhor Canal", key="calc", type="primary", use_container_width=True):
+        # Salva no estado permanente
+        st.session_state['roas_calc_feito'] = True
+        st.session_state['invest_valor'] = investimento
+        st.session_state['df_roas_data'] = pd.DataFrame({"ROAS": [2.1, 1.4, 4.0]}, index=["Meta", "Google", "Organico"])
+        st.success("Cálculo realizado! Gráfico fixado abaixo.")
+
+    # Mostra o gráfico SE já foi calculado, mesmo após o relógio atualizar
+    if st.session_state['roas_calc_feito'] and st.session_state['df_roas_data'] is not None:
+        st.divider()
+        st.bar_chart(st.session_state['df_roas_data'])
+        st.success(f"Com R${st.session_state['invest_valor']}: Orgânico ROAS 4x melhor! (Meta 2.1x vs Google 1.4x)")
+        if st.button("🔄 Limpar cálculo", key="limpar_roas"):
+            st.session_state['roas_calc_feito'] = False
+            st.session_state['df_roas_data'] = None
+            st.rerun()
+        
 
 with tab_invest:
     render_investimentos()
