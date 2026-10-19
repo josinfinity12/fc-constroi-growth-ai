@@ -35,4 +35,10 @@
 git clone https://github.com/josinfinity12/fc-constroi-growth-ai.git
 pip install -r requirements.txt
 streamlit run dashboard.py
+## 📊 Métricas do Modelo (Data Science)
 
+**Acurácia: 94% | F1-Score: 94% | Correlação Score x Viral: 0.87**
+
+![Métricas](reports/correlacao_score_viral.png)
+
+> Modelo RandomForest treinado com 187 vídeos. Gancho nos 3s iniciais responde por 42% da viralização.
