@@ -3,10 +3,11 @@ import pandas as pd
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io
+from datetime import datetime
 
-st.set_page_config(page_title="FC Constrói - Growth AI v2.5.1", layout="wide")
-st.title("FC Constrói - Growth AI v2.5.1")
-st.caption("v2.5.1 - NOVA ABA INVESTIMENTOS + Fix + Thumb 1280x720 combinada + Todas abas originais")
+st.set_page_config(page_title="FC Constrói - Growth AI v2.6.1", layout="wide")
+st.title("FC Constrói - Growth AI v2.6.1")
+st.caption("v2.6.1 - Mantém todas abas originais + Investimentos com Auto Save + PDF")
 
 tab_filtros, tab2, tab3, tab4, tab5, tab8, tab_invest = st.tabs([
     "🔥 FILTROS (Cursos+Local)", 
@@ -150,23 +151,55 @@ def criar_thumb_combinada(imagens_pil_list, texto, modo_layout, cor_fundo):
     draw.text((45, H - 80), "FC CONSTROI", font=font_small, fill="white")
     return base
 
+def gerar_pdf_investimentos(dados):
+    try:
+        from fpdf import FPDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(0, 10, f"FC Constroi - Relatorio {dados['data']}", ln=True, align='C')
+        pdf.set_font("Arial", "", 11)
+        pdf.ln(8)
+        for k, v in dados.items():
+            if k != "data":
+                pdf.cell(0, 7, f"{k}: {v}", ln=True)
+        return pdf.output(dest='S').encode('latin-1')
+    except:
+        txt = f"FC CONSTROI - INVESTIMENTOS\nData: {dados['data']}\n\n"
+        for k, v in dados.items():
+            if k != "data":
+                txt += f"{k}: {v}\n"
+        img = Image.new('RGB', (800, 1000), 'white')
+        d = ImageDraw.Draw(img)
+        try:
+            f = ImageFont.truetype("arial.ttf", 18)
+        except:
+            f = ImageFont.load_default()
+        d.text((20, 20), txt, font=f, fill='black')
+        buf = io.BytesIO()
+        img.save(buf, format='PDF')
+        return buf.getvalue()
+
 def render_investimentos():
-    st.subheader("📈 INVESTIMENTOS - Controle Financeiro Completo")
-    st.caption("Os 10 parâmetros mais usados por quem vende curso + obra")
+    st.subheader("📈 INVESTIMENTOS - Auto Save + PDF")
+    st.caption("Mesmos parâmetros + Salvamento automático + Histórico + PDF")
+    if 'historico_inv' not in st.session_state:
+        st.session_state['historico_inv'] = []
+    
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("#### 💸 Entradas")
-        faturamento_curso = st.number_input("Faturamento Curso (Kiwify) R$", value=8500.0, step=100.0, key="fat_curso_inv")
-        faturamento_obra = st.number_input("Faturamento Obras Locais R$", value=6200.0, step=100.0, key="fat_obra_inv")
-        outros = st.number_input("Outros (YouTube, parceria) R$", value=0.0, key="outros_inv")
+        faturamento_curso = st.number_input("Faturamento Curso (Kiwify) R$", value=8500.0, step=100.0, key="fat_curso_v261")
+        faturamento_obra = st.number_input("Faturamento Obras Locais R$", value=6200.0, step=100.0, key="fat_obra_v261")
+        outros = st.number_input("Outros (YouTube, parceria) R$", value=0.0, key="outros_v261")
         faturamento_total = faturamento_curso + faturamento_obra + outros
         st.metric("Faturamento Total", f"R$ {faturamento_total:,.2f}")
     with c2:
         st.markdown("#### 💳 Custos / Investimentos")
-        gasto_trafego = st.number_input("Tráfego Pago (Meta/Google) R$", value=1200.0, step=50.0, key="traf_inv")
-        custo_material = st.number_input("Material / Porcelanato / Insumos R$", value=2800.0, step=100.0, key="mat_inv")
-        custo_ferramentas = st.number_input("Ferramentas / Aluguel / Gasolina R$", value=450.0, key="ferr_inv")
-        taxas = st.number_input("Taxas Kiwify + Impostos (15%) R$", value=faturamento_curso*0.15, key="taxas_inv")
+        gasto_trafego = st.number_input("Tráfego Pago (Meta/Google) R$", value=1200.0, step=50.0, key="traf_v261")
+        custo_material = st.number_input("Material / Porcelanato / Insumos R$", value=2800.0, step=100.0, key="mat_v261")
+        custo_ferramentas = st.number_input("Ferramentas / Aluguel / Gasolina R$", value=450.0, key="ferr_v261")
+        taxas = st.number_input("Taxas Kiwify + Impostos (15%) R$", value=faturamento_curso*0.15, key="taxas_v261")
         custo_total = gasto_trafego + custo_material + custo_ferramentas + taxas
         st.metric("Custo Total", f"R$ {custo_total:,.2f}")
     with c3:
@@ -181,6 +214,7 @@ def render_investimentos():
         st.metric("Lucro Líquido (Ganância real)", f"R$ {lucro_liquido:,.2f}", f"{margem_liquida:.1f}% margem")
         st.metric("ROI", f"{roi:.1f}%")
         st.metric("ROAS Geral", f"{roas:.2f}x")
+    
     st.divider()
     col_graf1, col_graf2, col_graf3 = st.columns(3)
     with col_graf1:
@@ -199,27 +233,67 @@ def render_investimentos():
         elif margem_liquida >= 15:
             st.warning(f"Margem {margem_liquida:.1f}% - Boa")
         else:
-            st.error(f"Margem {margem_liquida:.1f}% - ALERTA! Abaixo de 15%")
+            st.error(f"Margem {margem_liquida:.1f}% - ALERTA!")
+
     st.divider()
     st.markdown("#### 🎯 Métricas Avançadas (CAC, Ticket, LTV)")
     cc1, cc2, cc3, cc4 = st.columns(4)
     with cc1:
-        vendas = st.number_input("Vendas fechadas", value=8, min_value=1, key="vendas_inv")
+        vendas = st.number_input("Vendas fechadas", value=8, min_value=1, key="vendas_v261")
         ticket_medio = faturamento_total / vendas if vendas else 0
         st.metric("Ticket Médio", f"R$ {ticket_medio:,.2f}")
     with cc2:
+        leads = st.number_input("Leads no mês", value=45, key="leads_v261")
         cac = (gasto_trafego / vendas) if vendas else 0
         st.metric("CAC (Custo por Cliente)", f"R$ {cac:,.2f}")
     with cc3:
-        leads = st.number_input("Leads no mês", value=45, key="leads_inv")
         conversao = (vendas / leads * 100) if leads else 0
         st.metric("Taxa Conversão", f"{conversao:.1f}%")
     with cc4:
         ltv = ticket_medio * 1.8
         ltv_cac = (ltv / cac) if cac else 0
         st.metric("LTV / CAC", f"{ltv_cac:.1f}x", help="Ideal >3x")
-    st.info("Se LTV/CAC <3, seu tráfego está caro. Se Lucro Líquido <0, você está pagando pra trabalhar!")
 
+    st.divider()
+    st.markdown("### 💾 Salvar Automático + Exportar PDF")
+    auto = st.checkbox("✅ Ativar SALVAR AUTOMÁTICO", value=True, key="auto_save")
+    col_save, col_pdf, col_hist = st.columns([1, 1, 2])
+    
+    dados_atual = {
+        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "Faturamento Total": f"R$ {faturamento_total:,.2f}",
+        "Curso": f"R$ {faturamento_curso:,.2f}",
+        "Obras": f"R$ {faturamento_obra:,.2f}",
+        "Custo Total": f"R$ {custo_total:,.2f}",
+        "Lucro Bruto": f"R$ {lucro_bruto:,.2f} ({margem_bruta:.1f}%)",
+        "Lucro Liquido": f"R$ {lucro_liquido:,.2f} ({margem_liquida:.1f}%)",
+        "ROI": f"{roi:.1f}%",
+        "ROAS": f"{roas:.2f}x",
+        "Ticket Medio": f"R$ {ticket_medio:,.2f}",
+        "CAC": f"R$ {cac:,.2f}",
+        "Conversao": f"{conversao:.1f}%",
+        "LTV/CAC": f"{ltv_cac:.1f}x"
+    }
+
+    with col_save:
+        if st.button("💾 SALVAR AGORA", use_container_width=True, type="primary") or (auto and st.session_state.get('last_save') != faturamento_total):
+            st.session_state['historico_inv'].append(dados_atual)
+            st.session_state['last_save'] = faturamento_total
+            st.success(f"Salvo! {len(st.session_state['historico_inv'])} registros")
+    
+    with col_pdf:
+        pdf_bytes = gerar_pdf_investimentos(dados_atual)
+        st.download_button("📄 BAIXAR PDF RELATÓRIO", data=pdf_bytes, file_name=f"relatorio_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf", mime="application/pdf", use_container_width=True)
+    
+    with col_hist:
+        if st.session_state['historico_inv']:
+            df_hist = pd.DataFrame(st.session_state['historico_inv'])
+            st.dataframe(df_hist.tail(10), use_container_width=True)
+            st.download_button("⬇️ BAIXAR HISTÓRICO CSV", df_hist.to_csv(index=False).encode('utf-8'), "historico_investimentos.csv", "text/csv", use_container_width=True)
+        else:
+            st.info("Nenhum histórico. Clique em Salvar.")
+
+# ========== ABAS ORIGINAIS 100% PRESERVADAS ==========
 with tab_filtros:
     col_f1, col_f2 = st.columns(2, gap="large")
     with col_f1:
@@ -358,4 +432,3 @@ with tab8:
 
 with tab_invest:
     render_investimentos()
-    
