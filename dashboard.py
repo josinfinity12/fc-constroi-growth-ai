@@ -4,9 +4,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io
 from datetime import datetime
+import pytz
+from streamlit_autorefresh import st_autorefresh
 from designer import aplicar_design, mostrar_header_com_logo
 
-st.set_page_config(page_title="FC Constrói - Growth AI v3.0.2", layout="wide", page_icon="🏗️")
+st.set_page_config(page_title="FC Constrói - Growth AI v3.1.1", layout="wide", page_icon="🏗️")
+
+# --- NOVO: RELÓGIO ATUALIZÁVEL AUTOMÁTICO A CADA 1 SEGUNDO ---
+st_autorefresh(interval=1000, key="relogio_auto_fc_v311")
+
 aplicar_design()
 mostrar_header_com_logo()
 
@@ -355,4 +361,14 @@ with tab8:
 
 with tab_invest:
     render_investimentos()
+
+# --- FOOTER COM DATA/HORA VIVA ---
+fuso_footer = pytz.timezone('America/Bahia')
+agora_footer = datetime.now(fuso_footer)
+st.markdown(f"""
+<div style="text-align:center; color:#9CA3AF; font-size:11px; margin-top:40px; padding-top:15px; border-top:1px solid #E5E7EB;">
+    FC CONSTRÓI © {agora_footer.year} • {agora_footer.strftime('%d/%m/%Y %H:%M:%S')} - Irará/BA • GROWTH AI v3.1.1 • Cores Anteriores
+</div>
+""", unsafe_allow_html=True)
+
 

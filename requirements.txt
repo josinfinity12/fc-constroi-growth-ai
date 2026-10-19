@@ -11,3 +11,6 @@ plotly
 python-dotenv
 openai
 google-generativeai
+streamlit-autorefresh
+pytz
+fpdf
