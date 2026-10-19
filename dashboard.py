@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-st.set_page_config(page_title="FC Constrói - Growth AI v2.3.2", layout="wide")
-st.title("FC Constrói - Growth AI v2.3.2")
-st.caption("v2.3.2 - FILTROS (Cursos+Local) + Feira=FSA + Gráficos")
+st.set_page_config(page_title="FC Constrói - Growth AI v2.3.3", layout="wide")
+st.title("FC Constrói - Growth AI v2.3.3")
+st.caption("v2.3.3 - FILTROS (Cursos+Local) + Graficos só no Dashboard")
 
 tab_filtros, tab2, tab3, tab4, tab5, tab8 = st.tabs([
     "🔥 FILTROS (Cursos+Local)", 
@@ -16,7 +16,7 @@ tab_filtros, tab2, tab3, tab4, tab5, tab8 = st.tabs([
 ])
 
 def mostrar_graficos_ia():
-    st.markdown("### 📈 Métricas do Modelo IA - SEMPRE VISÍVEL")
+    st.markdown("### 📈 Métricas do Modelo IA - Dashboard Exclusivo")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.metric("Acurácia", "94.2%", "↑ 1.2%")
@@ -32,7 +32,7 @@ def mostrar_graficos_ia():
         st.progress(96)
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        st.write("**Correlação 0.87**")
+        st.write("**Correlação 0.87 - Previsão vs Real**")
         chart_data = pd.DataFrame({
             "Real": np.random.uniform(60, 100, 20),
             "Previsto": np.random.uniform(62, 98, 20)
@@ -89,10 +89,8 @@ def filtrar_local_func(texto, cidade_texto, cidade_base_selecionada, raio_km):
         return "APROVADO - Lead Local"
     return "REPROVADO - Sem urgencia"
 
-# ========== ABA PRINCIPAL FILTROS SEM TITULO ==========
+# ========== ABA 1: FILTROS LADO A LADO SEM GRAFICOS ==========
 with tab_filtros:
-    mostrar_graficos_ia()
-    st.divider()
     col_f1, col_f2 = st.columns(2, gap="large")
 
     with col_f1:
@@ -148,22 +146,55 @@ with tab_filtros:
             st.download_button("Baixar Locais", aprovados.to_csv(index=False).encode('utf-8'), "leads_local.csv", key="down2")
 
 with tab2:
-    st.header("Reciclagem de Conteudo")
-    mostrar_graficos_ia()
+    st.subheader("♻️ Reciclar Conteúdo")
+    st.caption("Transforme 1 vídeo em 3 formatos")
+    url = st.text_input("Link do vídeo YouTube (longo)")
+    if st.button("Gerar 3 versões"):
+        st.write("1. Shorts 0-30s (gancho)")
+        st.write("2. Reels com legenda")
+        st.write("3. Texto para descrição")
+    st.file_uploader("Upload vídeo para transcrição", type=["mp4","mov"], key="vid")
 
 with tab3:
-    st.header("Dashboard + Graficos IA Fixos")
+    st.subheader("📊 Dashboard + Gráficos IA - ÚNICA ABA COM GRÁFICOS")
     mostrar_graficos_ia()
+    st.divider()
+    st.write("**Resumo Operacional**")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Leads Curso Semana", "127")
+    c2.metric("Leads Local Semana", "18")
+    c3.metric("Taxa Conversão", "22%")
 
 with tab4:
-    st.header("Thumbnails 1080x1920")
-    mostrar_graficos_ia()
+    st.subheader("🎨 Thumbnails 1080x1920")
+    st.caption("Gerador de capas para Shorts/Reels")
+    titulo_thumb = st.text_input("Texto da Thumb (max 4 palavras)", "BANCADA 2M")
+    cor = st.color_picker("Cor fundo", "#FF0000")
+    if st.button("Gerar Preview Thumb"):
+        st.info(f"Preview: {titulo_thumb} com fundo {cor} - 1080x1920")
+        st.image("https://via.placeholder.com/270x480.png?text=THUMB+1080x1920", width=200)
 
 with tab5:
-    st.header("YouTube Pack")
-    mostrar_graficos_ia()
+    st.subheader("📦 YouTube Pack - 2 Negócios")
+    st.caption("Separação Curso Online vs Trabalhos Locais")
+    negocio = st.selectbox("Negócio:", ["Curso Online Porcelanato", "Trabalhos Locais (Francis)"])
+    tema = st.text_input("Tema do vídeo", "como fazer bancada")
+    if st.button("Gerar Títulos + Descrição + Tags"):
+        st.write(f"**Para {negocio}:**")
+        st.write(f"Títulos: 1. {tema} - SEM SEGREDO 2. Como fazer {tema} em 1 dia")
+        st.write("Descrição com CTA + Tags")
 
 with tab8:
-    st.header("Metricas ROAS")
-    mostrar_graficos_ia()
-    
+    st.subheader("💰 CAC CPA ROAS - Onde investir R$300")
+    st.caption("Meta vs Google vs Orgânico")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.file_uploader("Meta ADS CSV (gasto, leads)", type="csv", key="meta")
+        st.file_uploader("Google ADS CSV", type="csv", key="google")
+    with col2:
+        st.file_uploader("Kiwify CSV (vendas)", type="csv", key="kiwify")
+        investimento = st.number_input("Investimento teste R$", value=300)
+    if st.button("Calcular ROAS e Melhor Canal", key="calc"):
+        st.success(f"Com R${investimento}: Meta ROAS 2.1x, Google 1.4x, Orgânico 4x")
+        st.bar_chart(pd.DataFrame({"ROAS": [2.1, 1.4, 4.0]}, index=["Meta","Google","Organico"]))
+        
