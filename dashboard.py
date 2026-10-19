@@ -84,25 +84,33 @@ with tab4:
             st.warning("Digita o gancho primeiro")
 
 # --- ABA 5 - YOUTUBE PACK ---
-with tab5:
-    st.header("Aba 5 - YouTube Pack SEO - FC Constrói")
-    gancho5 = st.text_input("Gancho", key="gancho5_final")
+withwith tab5:
+    st.header("Aba 5 - YouTube Pack SEO - FC Constrói (2 Negócios)")
+    
+    tipo_negocio = st.selectbox("Tipo de negócio:", ["AUTO (detecta sozinho)", "SERVICO_LOCAL", "CURSO_ONLINE"], key="tipo_negocio_final")
+    cidade_servico = st.selectbox("Se for SERVIÇO, escolha a cidade:", ["", "Irará", "Santanópolis", "Feira de Santana", "Água Fria", "Ouriçanga", "Santa Bárbara", "Serrinha"], key="cidade_final")
+    
+    gancho5 = st.text_input("Gancho (ex: bancada gourmet 2m / curso pia banheiro)", key="gancho5_final")
     score5 = st.slider("Score do seu preditor (0-10)", 0.0, 10.0, 9.0, key="score5_final")
-    preco5 = st.text_input("Preço", "R$99,90", key="preco5_final")
-    preco_rem5 = st.text_input("Remarketing", "R$49,90", key="rem5_yt_final")
-    if st.button("Gerar Pack YouTube", key="btn_yt"):
+    
+    if st.button("Gerar Pack YouTube Corrigido", key="btn_yt"):
         if gancho5:
-            pack = gerar_pack_youtube(gancho5, score5, preco5, preco_rem5)
-            st.subheader("Título SEO (copiar)")
-            st.code(pack["titulo"])
-            st.subheader("Descrição")
-            st.text_area("Descrição", pack["descricao"], height=300, key="desc_final")
-            st.subheader("Tags")
-            st.write(pack["tags"])
-            st.success(f"{pack['preco_cheio']} / Remarketing {pack['preco_remarketing']}")
+            tipo_map = {"AUTO (detecta sozinho)": "AUTO", "SERVICO_LOCAL": "SERVICO_LOCAL", "CURSO_ONLINE": "CURSO_ONLINE"}
+            pack = gerar_pack_youtube(gancho5, score5, "R$99,90", "R$49,90", cidade_servico, tipo_map[tipo_negocio])
+            
+            if pack["tipo"] == "CURIOSO":
+                st.error(f"🚫 CURIOSO FILTRADO: {pack['titulo']}")
+                st.warning(pack["descricao"])
+            else:
+                st.success(f"Tipo detectado: {pack['tipo']} | {pack['recomendacao']}")
+                st.subheader("Título SEO (copiar)")
+                st.code(pack["titulo"])
+                st.subheader("Descrição")
+                st.text_area("Descrição", pack["descricao"], height=400, key="desc_final")
+                st.subheader("Tags")
+                st.write(", ".join(pack["tags"]))
         else:
             st.warning("Digita o gancho")
-
 # --- ABA 7 - REMARKETING 30 DIAS ---
 with tab7:
     st.header("Aba 7 - Remarketing 30 dias - Filtro R$49,90")
