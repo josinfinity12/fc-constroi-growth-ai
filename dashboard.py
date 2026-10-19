@@ -4,9 +4,11 @@ sys.path.append('scripts')
 from thumbnail_generator import gerar_todos_modelos
 from youtube_pack import gerar_pack_youtube
 from remarketing_filter import filtrar_remarketing_30d
-from metrics_paid_organic import calcular_metricas_pagas, calcular_metricas_organicas, gerar_recomendacao
+try:
+    from metrics_paid_organic import calcular_metricas_pagas, calcular_metricas_organicas, gerar_recomendacao
+except:
+    from scripts.metrics_paid_organic import calcular_metricas_pagas, calcular_metricas_organicas, gerar_recomendacao
 import pandas as pd
-
 st.set_page_config(page_title="FC Constrói - Growth AI", layout="wide")
 st.title("FC Constrói - Growth AI v1.0")
 
