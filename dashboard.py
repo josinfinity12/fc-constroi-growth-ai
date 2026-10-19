@@ -84,7 +84,7 @@ with tab4:
             st.warning("Digita o gancho primeiro")
 
 # --- ABA 5 - YOUTUBE PACK ---
-withwith tab5:
+with tab5:
     st.header("Aba 5 - YouTube Pack SEO - FC Constrói (2 Negócios)")
     
     tipo_negocio = st.selectbox("Tipo de negócio:", ["AUTO (detecta sozinho)", "SERVICO_LOCAL", "CURSO_ONLINE"], key="tipo_negocio_final")
