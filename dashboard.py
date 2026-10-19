@@ -8,10 +8,10 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 from designer import aplicar_design, mostrar_header_com_logo
 
-st.set_page_config(page_title="FC Constrói - Growth AI v3.1.1", layout="wide", page_icon="🏗️")
+st.set_page_config(page_title="FC Constrói - Growth AI v3.1.3", layout="wide", page_icon="🏗️")
 
-# --- NOVO: RELÓGIO ATUALIZÁVEL AUTOMÁTICO A CADA 1 SEGUNDO ---
-st_autorefresh(interval=60000, key="relogio_auto_fc_v311")
+# Relógio a cada 60s pra não piscar o ROAS (mas mostra H:M:S)
+st_autorefresh(interval=60000, key="relogio_auto_fc_v313")
 
 aplicar_design()
 mostrar_header_com_logo()
@@ -27,7 +27,7 @@ tab_filtros, tab2, tab3, tab4, tab5, tab8, tab_invest = st.tabs([
 ])
 
 def mostrar_graficos_ia():
-    st.markdown("### 📈 Métricas do Modelo IA - Dashboard Exclusivo")
+    st.markdown("### 📈 Métricas do Modelo IA")
     c1, c2, c3, c4 = st.columns(4)
     with c1: st.metric("Acurácia", "94.2%", "↑ 1.2%"); st.progress(94)
     with c2: st.metric("F1-Score", "0.91", "↑ 0.03"); st.progress(91)
@@ -160,7 +160,7 @@ def render_investimentos():
         roas = (faturamento_total / gasto_trafego) if gasto_trafego else 0
         st.markdown("#### 📊 Resultados CHAVE")
         st.metric("Lucro Bruto", f"R$ {lucro_bruto:,.2f}", f"{margem_bruta:.1f}% margem")
-        st.metric("Lucro Líquido (Ganância real)", f"R$ {lucro_liquido:,.2f}", f"{margem_liquida:.1f}% margem")
+        st.metric("Lucro Líquido", f"R$ {lucro_liquido:,.2f}", f"{margem_liquida:.1f}% margem")
         st.metric("ROI", f"{roi:.1f}%")
         st.metric("ROAS Geral", f"{roas:.2f}x")
     st.divider()
@@ -180,7 +180,7 @@ def render_investimentos():
         elif margem_liquida >= 15: st.warning(f"Margem {margem_liquida:.1f}% - Boa")
         else: st.error(f"Margem {margem_liquida:.1f}% - ALERTA!")
     st.divider()
-    st.markdown("#### 🎯 Métricas Avançadas (CAC, Ticket, LTV)")
+    st.markdown("#### 🎯 Métricas Avançadas")
     cc1, cc2, cc3, cc4 = st.columns(4)
     with cc1:
         vendas = st.number_input("Vendas fechadas", value=8, min_value=1, key="vendas_v302")
@@ -189,16 +189,16 @@ def render_investimentos():
     with cc2:
         leads = st.number_input("Leads no mês", value=45, key="leads_v302")
         cac = (gasto_trafego / vendas) if vendas else 0
-        st.metric("CAC (Custo por Cliente)", f"R$ {cac:,.2f}")
+        st.metric("CAC", f"R$ {cac:,.2f}")
     with cc3:
         conversao = (vendas / leads * 100) if leads else 0
         st.metric("Taxa Conversão", f"{conversao:.1f}%")
     with cc4:
         ltv = ticket_medio * 1.8
         ltv_cac = (ltv / cac) if cac else 0
-        st.metric("LTV / CAC", f"{ltv_cac:.1f}x", help="Ideal >3x")
+        st.metric("LTV / CAC", f"{ltv_cac:.1f}x")
     st.divider()
-    st.markdown("### 💾 Salvar Automático + Exportar PDF")
+    st.markdown("### 💾 Salvar + PDF")
     auto = st.checkbox("✅ Ativar SALVAR AUTOMÁTICO", value=True, key="auto_save_v302")
     col_save, col_pdf, col_hist = st.columns([1, 1, 2])
     dados_atual = {
@@ -223,20 +223,19 @@ def render_investimentos():
             st.success(f"Salvo! {len(st.session_state['historico_inv'])} registros")
     with col_pdf:
         pdf_bytes = gerar_pdf_investimentos(dados_atual)
-        st.download_button("📄 BAIXAR PDF RELATÓRIO", data=pdf_bytes, file_name=f"relatorio_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf", mime="application/pdf", use_container_width=True)
+        st.download_button("📄 BAIXAR PDF", data=pdf_bytes, file_name=f"relatorio_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf", mime="application/pdf", use_container_width=True)
     with col_hist:
         if st.session_state['historico_inv']:
             df_hist = pd.DataFrame(st.session_state['historico_inv'])
             st.dataframe(df_hist.tail(10), use_container_width=True)
-            st.download_button("⬇️ BAIXAR HISTÓRICO CSV", df_hist.to_csv(index=False).encode('utf-8'), "historico_investimentos.csv", "text/csv", use_container_width=True)
         else:
             st.info("Nenhum histórico. Clique em Salvar.")
 
+# ---- ABAS ----
 with tab_filtros:
     col_f1, col_f2 = st.columns(2, gap="large")
     with col_f1:
         st.subheader("🔥 FILTRO 1: Curso Online Porcelanato")
-        st.caption("Só porcelanato/cerâmica + PT-BR")
         texto_curso = st.text_area("Comentários Curso (1 por linha)", height=180, value="quero aprender bancada de porcelanato\npia de banheiro porcelanato quanto custa curso\ncurso gratis de gesso how to free", key="t1")
         file_curso = st.file_uploader("CSV Curso", type="csv", key="curso")
         if st.button("FILTRAR CURSO", key="f1", use_container_width=True):
@@ -256,7 +255,6 @@ with tab_filtros:
             st.download_button("Baixar Curso Aprovados", aprovados.to_csv(index=False).encode('utf-8'), "leads_curso.csv", key="down1")
     with col_f2:
         st.subheader("🎯 FILTRO 2: Trabalhos Locais - 6 Cidades")
-        st.caption("Santanopolis PRIORIDADE + Feira=FSA")
         c1, c2 = st.columns(2)
         with c1:
             cidade_filtro = st.selectbox("Base:", ["Santanopolis (PRIORIDADE)", "Irara", "Feira de Santana", "Santa Barbara", "Serrinha", "Ouricangas", "Todas"], index=0, key="cidade")
@@ -285,7 +283,6 @@ with tab_filtros:
 
 with tab2:
     st.subheader("♻️ Reciclar Conteúdo")
-    st.caption("Transforme 1 vídeo em 3 formatos")
     url = st.text_input("Link do vídeo YouTube (longo)")
     if st.button("Gerar 3 versões"):
         st.write("1. Shorts 0-30s (gancho)")
@@ -294,18 +291,16 @@ with tab2:
     st.file_uploader("Upload vídeo para transcrição", type=["mp4","mov"], key="vid")
 
 with tab3:
-    st.subheader("📊 Dashboard + Gráficos IA - ÚNICA ABA COM GRÁFICOS")
+    st.subheader("📊 Dashboard + Gráficos IA")
     mostrar_graficos_ia()
     st.divider()
-    st.write("**Resumo Operacional**")
     c1, c2, c3 = st.columns(3)
     c1.metric("Leads Curso Semana", "127")
     c2.metric("Leads Local Semana", "18")
     c3.metric("Taxa Conversão", "22%")
 
 with tab4:
-    st.subheader("🎨 Thumbnails AUTOMÁTICOS 1280x720 - COMBINADA")
-    st.caption("Pessoa + Obra / Antes Depois - Formato YouTube 16:9")
+    st.subheader("🎨 Thumbnails 1280x720")
     col_a, col_b = st.columns([1.2, 0.8], gap="large")
     with col_a:
         modo = st.selectbox("LAYOUT 1280x720:", ["1 Foto Só (Obra ou Você)","2 Fotos - ANTES / DEPOIS (lado a lado)","2 Fotos - PESSOA + OBRA (lado a lado)","3 Fotos - Grade"], index=2, key="layout_thumb")
@@ -313,85 +308,54 @@ with tab4:
             up = st.file_uploader("Sobe 1 foto", type=["jpg", "png", "jpeg"], key="1foto")
             files = [up] if up else []
         else:
-            up = st.file_uploader("Sobe 2 ou 3 fotos (na ordem)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="multifoto")
+            up = st.file_uploader("Sobe 2 ou 3 fotos", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="multifoto")
             files = up if up else []
         texto_thumb = st.text_input("Texto da Thumb (max 4 palavras)", "BANCADA 2M", key="txt_thumb")
-        cor_fundo = st.color_picker("Cor de fundo (se não tiver foto)", "#FF6B00", key="cor_thumb")
-        estilo = st.selectbox("Estilo:", ["Com escurecer (recomendado)", "Foto original"], key="estilo")
-        if st.button("🔥 GERAR THUMB AUTOMÁTICA 1280x720", use_container_width=True, type="primary"):
+        cor_fundo = st.color_picker("Cor de fundo", "#FF6B00", key="cor_thumb")
+        if st.button("🔥 GERAR THUMB 1280x720", use_container_width=True, type="primary"):
             pil_list = [Image.open(f) for f in files if f]
             if not pil_list: st.warning("Sobe pelo menos 1 foto!")
             else:
                 thumb = criar_thumb_combinada(pil_list, texto_thumb, modo, cor_fundo)
                 st.session_state['thumb_comb'] = thumb
-                st.success("Thumb 1280x720 gerada!")
+                st.success("Thumb gerada!")
     with col_b:
         if 'thumb_comb' in st.session_state:
-            st.write("**Preview 1280x720:**")
             st.image(st.session_state['thumb_comb'], use_container_width=True)
             buf = io.BytesIO(); st.session_state['thumb_comb'].save(buf, format="PNG")
-            st.download_button("⬇️ BAIXAR THUMB 1280x720 PNG", buf.getvalue(), f"thumb_{texto_thumb}_1280x720.png", "image/png", use_container_width=True)
-        else:
-            st.info("Sobe fotos e gera - formato 1280x720")
+            st.download_button("⬇️ BAIXAR PNG", buf.getvalue(), f"thumb_{texto_thumb}.png", "image/png", use_container_width=True)
 
 with tab5:
-    st.subheader("📦 YouTube Pack - 2 Negócios")
-    st.caption("Separação Curso Online vs Trabalhos Locais")
+    st.subheader("📦 YouTube Pack")
     negocio = st.selectbox("Negócio:", ["Curso Online Porcelanato", "Trabalhos Locais (Francis)"])
     tema = st.text_input("Tema do vídeo", "como fazer bancada")
     if st.button("Gerar Títulos + Descrição + Tags"):
         st.write(f"**Para {negocio}:**")
         st.write(f"Títulos: 1. {tema} - SEM SEGREDO 2. Como fazer {tema} em 1 dia")
-        st.write("Descrição com CTA + Tags")
 
-with with tab8:
+with tab8:
     st.subheader("💰 CAC CPA ROAS - Onde investir R$300")
-    st.caption("Meta vs Google vs Orgânico")
-    
-    # --- CORREÇÃO: Salva estado pra não sumir com o relógio ---
+    st.caption("Meta vs Google vs Orgânico - CORRIGIDO NÃO SOME MAIS")
     if 'roas_calc_feito' not in st.session_state:
         st.session_state['roas_calc_feito'] = False
     if 'df_roas_data' not in st.session_state:
         st.session_state['df_roas_data'] = None
-    if 'invest_valor' not in st.session_state:
-        st.session_state['invest_valor'] = 300
-
     col1, col2 = st.columns(2)
     with col1:
-        st.file_uploader("Meta ADS CSV (gasto, leads)", type="csv", key="meta")
+        st.file_uploader("Meta ADS CSV", type="csv", key="meta")
         st.file_uploader("Google ADS CSV", type="csv", key="google")
     with col2:
-        st.file_uploader("Kiwify CSV (vendas)", type="csv", key="kiwify")
-        investimento = st.number_input("Investimento teste R$", value=st.session_state['invest_valor'], key="invest_input")
-
+        st.file_uploader("Kiwify CSV", type="csv", key="kiwify")
+        investimento = st.number_input("Investimento teste R$", value=300, key="invest_test")
     if st.button("Calcular ROAS e Melhor Canal", key="calc", type="primary", use_container_width=True):
-        # Salva no estado permanente
         st.session_state['roas_calc_feito'] = True
-        st.session_state['invest_valor'] = investimento
         st.session_state['df_roas_data'] = pd.DataFrame({"ROAS": [2.1, 1.4, 4.0]}, index=["Meta", "Google", "Organico"])
-        st.success("Cálculo realizado! Gráfico fixado abaixo.")
-
-    # Mostra o gráfico SE já foi calculado, mesmo após o relógio atualizar
     if st.session_state['roas_calc_feito'] and st.session_state['df_roas_data'] is not None:
         st.divider()
         st.bar_chart(st.session_state['df_roas_data'])
-        st.success(f"Com R${st.session_state['invest_valor']}: Orgânico ROAS 4x melhor! (Meta 2.1x vs Google 1.4x)")
-        if st.button("🔄 Limpar cálculo", key="limpar_roas"):
-            st.session_state['roas_calc_feito'] = False
-            st.session_state['df_roas_data'] = None
-            st.rerun()
-        
+        st.success(f"Com R${investimento}: Orgânico ROAS 4x melhor!")
 
 with tab_invest:
     render_investimentos()
-
-# --- FOOTER COM DATA/HORA VIVA ---
-fuso_footer = pytz.timezone('America/Bahia')
-agora_footer = datetime.now(fuso_footer)
-st.markdown(f"""
-<div style="text-align:center; color:#9CA3AF; font-size:11px; margin-top:40px; padding-top:15px; border-top:1px solid #E5E7EB;">
-    FC CONSTRÓI © {agora_footer.year} • {agora_footer.strftime('%d/%m/%Y %H:%M:%S')} - Irará/BA • GROWTH AI v3.1.1 • Cores Anteriores
-</div>
-""", unsafe_allow_html=True)
-
+    
 
