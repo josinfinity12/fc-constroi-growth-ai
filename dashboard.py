@@ -2,12 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-st.set_page_config(page_title="FC Constrói - Growth AI v2.3", layout="wide")
-st.title("FC Constrói - Growth AI v2.3")
-st.caption("v2.3 - Filtros lado a lado + 2 Aprovados 1 Reprovado Salvador")
+st.set_page_config(page_title="FC Constrói - Growth AI v2.3.2", layout="wide")
+st.title("FC Constrói - Growth AI v2.3.2")
+st.caption("v2.3.2 - FILTROS (Cursos+Local) + Feira=FSA + Gráficos")
 
 tab_filtros, tab2, tab3, tab4, tab5, tab8 = st.tabs([
-    "🔥 FILTROS LADO A LADO (Curso + Local)", 
+    "🔥 FILTROS (Cursos+Local)", 
     "♻️ Reciclar Conteúdo", 
     "📊 Dashboard + Gráficos IA", 
     "🎨 Thumbnails", 
@@ -73,9 +73,9 @@ def filtrar_local_func(texto, cidade_texto, cidade_base_selecionada, raio_km):
     if "santanopolis" in texto_completo or "santanópolis" in texto_completo:
         if any(x in texto_completo for x in interesses_local):
             return "APROVADO - 🔥 LEAD QUENTISSIMO Santanopolis (Francis)"
-    if "how much" in texto_completo or "salvador" in texto_completo or "são paulo" in texto_completo or "rio de janeiro" in texto_completo:
+    if "salvador" in texto_completo or "são paulo" in texto_completo or "rio de janeiro" in texto_completo:
         if not any(cid in texto_completo for cid in cidades_base):
-            return f"REPROVADO - Fora do raio {raio_km}km - Outra cidade (Salvador/Fora)"
+            return f"REPROVADO - Fora do raio {raio_km}km - Salvador/Fora"
     if "how much" in texto_completo:
         return "REPROVADO - Idioma"
     tem_cidade_valida = any(cid in texto_completo for cid in cidades_base)
@@ -89,12 +89,10 @@ def filtrar_local_func(texto, cidade_texto, cidade_base_selecionada, raio_km):
         return "APROVADO - Lead Local"
     return "REPROVADO - Sem urgencia"
 
-# ========== ABA PRINCIPAL FILTROS LADO A LADO ==========
+# ========== ABA PRINCIPAL FILTROS SEM TITULO ==========
 with tab_filtros:
     mostrar_graficos_ia()
     st.divider()
-    st.header("FILTROS LADO A LADO - Organizado")
-    
     col_f1, col_f2 = st.columns(2, gap="large")
 
     with col_f1:
@@ -127,7 +125,6 @@ with tab_filtros:
             cidade_filtro = st.selectbox("Base:", ["Santanopolis (PRIORIDADE)", "Irara", "Feira de Santana", "Santa Barbara", "Serrinha", "Ouricangas", "Todas"], index=0, key="cidade")
         with c2:
             raio = st.slider("Raio km", 10, 150, 50, key="raio")
-        
         texto_local = st.text_area("Mensagens Local (1 por linha)", height=180, 
             value="sou de Irara, quanto custa bancada 2m urgente\nFeira pia banheiro orcamento pra hoje\nsou de Salvador Bahia, quanto custa bancada 2m", key="t2")
         file_local = st.file_uploader("CSV Local", type="csv", key="local")
@@ -169,3 +166,4 @@ with tab5:
 with tab8:
     st.header("Metricas ROAS")
     mostrar_graficos_ia()
+    
