@@ -4,17 +4,18 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io
 
-st.set_page_config(page_title="FC Constrói - Growth AI v2.4.3", layout="wide")
-st.title("FC Constrói - Growth AI v2.4.3")
-st.caption("v2.4.3 - FIX ERRO + Mantém todas as abas originais + Thumb 1280x720 combinada")
+st.set_page_config(page_title="FC Constrói - Growth AI v2.5.1", layout="wide")
+st.title("FC Constrói - Growth AI v2.5.1")
+st.caption("v2.5.1 - NOVA ABA INVESTIMENTOS + Fix + Thumb 1280x720 combinada + Todas abas originais")
 
-tab_filtros, tab2, tab3, tab4, tab5, tab8 = st.tabs([
+tab_filtros, tab2, tab3, tab4, tab5, tab8, tab_invest = st.tabs([
     "🔥 FILTROS (Cursos+Local)", 
     "♻️ Reciclar Conteúdo", 
     "📊 Dashboard + Gráficos IA", 
     "🎨 Thumbnails", 
     "📦 YouTube Pack", 
-    "💰 CAC CPA ROAS"
+    "💰 CAC CPA ROAS",
+    "📈 INVESTIMENTOS"
 ])
 
 def mostrar_graficos_ia():
@@ -149,7 +150,76 @@ def criar_thumb_combinada(imagens_pil_list, texto, modo_layout, cor_fundo):
     draw.text((45, H - 80), "FC CONSTROI", font=font_small, fill="white")
     return base
 
-# ========== ABA 1: FILTROS - ORIGINAL COMPLETO ==========
+def render_investimentos():
+    st.subheader("📈 INVESTIMENTOS - Controle Financeiro Completo")
+    st.caption("Os 10 parâmetros mais usados por quem vende curso + obra")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("#### 💸 Entradas")
+        faturamento_curso = st.number_input("Faturamento Curso (Kiwify) R$", value=8500.0, step=100.0, key="fat_curso_inv")
+        faturamento_obra = st.number_input("Faturamento Obras Locais R$", value=6200.0, step=100.0, key="fat_obra_inv")
+        outros = st.number_input("Outros (YouTube, parceria) R$", value=0.0, key="outros_inv")
+        faturamento_total = faturamento_curso + faturamento_obra + outros
+        st.metric("Faturamento Total", f"R$ {faturamento_total:,.2f}")
+    with c2:
+        st.markdown("#### 💳 Custos / Investimentos")
+        gasto_trafego = st.number_input("Tráfego Pago (Meta/Google) R$", value=1200.0, step=50.0, key="traf_inv")
+        custo_material = st.number_input("Material / Porcelanato / Insumos R$", value=2800.0, step=100.0, key="mat_inv")
+        custo_ferramentas = st.number_input("Ferramentas / Aluguel / Gasolina R$", value=450.0, key="ferr_inv")
+        taxas = st.number_input("Taxas Kiwify + Impostos (15%) R$", value=faturamento_curso*0.15, key="taxas_inv")
+        custo_total = gasto_trafego + custo_material + custo_ferramentas + taxas
+        st.metric("Custo Total", f"R$ {custo_total:,.2f}")
+    with c3:
+        lucro_bruto = faturamento_total - custo_material
+        lucro_liquido = faturamento_total - custo_total
+        margem_bruta = (lucro_bruto / faturamento_total * 100) if faturamento_total else 0
+        margem_liquida = (lucro_liquido / faturamento_total * 100) if faturamento_total else 0
+        roi = (lucro_liquido / custo_total * 100) if custo_total else 0
+        roas = (faturamento_total / gasto_trafego) if gasto_trafego else 0
+        st.markdown("#### 📊 Resultados CHAVE")
+        st.metric("Lucro Bruto", f"R$ {lucro_bruto:,.2f}", f"{margem_bruta:.1f}% margem")
+        st.metric("Lucro Líquido (Ganância real)", f"R$ {lucro_liquido:,.2f}", f"{margem_liquida:.1f}% margem")
+        st.metric("ROI", f"{roi:.1f}%")
+        st.metric("ROAS Geral", f"{roas:.2f}x")
+    st.divider()
+    col_graf1, col_graf2, col_graf3 = st.columns(3)
+    with col_graf1:
+        st.write("**Faturamento por Fonte**")
+        df_fonte = pd.DataFrame({"Valor": [faturamento_curso, faturamento_obra, outros]}, index=["Curso", "Obras", "Outros"])
+        st.bar_chart(df_fonte)
+    with col_graf2:
+        st.write("**Custos vs Lucro**")
+        df_custo = pd.DataFrame({"Valor": [custo_total, lucro_liquido]}, index=["Custos", "Lucro Liquido"])
+        st.bar_chart(df_custo)
+    with col_graf3:
+        st.write("**Saúde do Negócio**")
+        st.progress(int(min(max(margem_liquida, 0), 100)))
+        if margem_liquida >= 30:
+            st.success(f"Margem {margem_liquida:.1f}% - EXCELENTE!")
+        elif margem_liquida >= 15:
+            st.warning(f"Margem {margem_liquida:.1f}% - Boa")
+        else:
+            st.error(f"Margem {margem_liquida:.1f}% - ALERTA! Abaixo de 15%")
+    st.divider()
+    st.markdown("#### 🎯 Métricas Avançadas (CAC, Ticket, LTV)")
+    cc1, cc2, cc3, cc4 = st.columns(4)
+    with cc1:
+        vendas = st.number_input("Vendas fechadas", value=8, min_value=1, key="vendas_inv")
+        ticket_medio = faturamento_total / vendas if vendas else 0
+        st.metric("Ticket Médio", f"R$ {ticket_medio:,.2f}")
+    with cc2:
+        cac = (gasto_trafego / vendas) if vendas else 0
+        st.metric("CAC (Custo por Cliente)", f"R$ {cac:,.2f}")
+    with cc3:
+        leads = st.number_input("Leads no mês", value=45, key="leads_inv")
+        conversao = (vendas / leads * 100) if leads else 0
+        st.metric("Taxa Conversão", f"{conversao:.1f}%")
+    with cc4:
+        ltv = ticket_medio * 1.8
+        ltv_cac = (ltv / cac) if cac else 0
+        st.metric("LTV / CAC", f"{ltv_cac:.1f}x", help="Ideal >3x")
+    st.info("Se LTV/CAC <3, seu tráfego está caro. Se Lucro Líquido <0, você está pagando pra trabalhar!")
+
 with tab_filtros:
     col_f1, col_f2 = st.columns(2, gap="large")
     with col_f1:
@@ -285,4 +355,7 @@ with tab8:
         df_roas = pd.DataFrame({"ROAS": [2.1, 1.4, 4.0]}, index=["Meta", "Google", "Organico"])
         st.bar_chart(df_roas)
         st.success(f"Com R${investimento}: Orgânico ROAS 4x melhor!")
-        
+
+with tab_invest:
+    render_investimentos()
+    
