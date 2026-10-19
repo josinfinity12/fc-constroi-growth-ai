@@ -151,7 +151,8 @@ with tab7:
     
     c1, c2 = st.columns(2)
     with c1:
-        cidade_filtro = st.selectbox("Base:", ["Irará", "Feira de Santana", "Todas"], index=0, key="cidade")
+        cidades_base = ["santanopolis", "santanópolis", "feira de santana", "irara", "irará", "santa barbara", "santa bárbara", "serrinha", "ouricangas", "ouriçangas"]
+    # PRIORIDADE: Santanópolis onde mora Francis = maior ticket - Bases oficiais limpas
     with c2:
         raio = st.slider("Raio km", 10, 150, 50, key="raio")
     
