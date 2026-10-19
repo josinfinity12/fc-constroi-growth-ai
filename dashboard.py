@@ -60,49 +60,19 @@ with tab7:
         resultado = filtrar_remarketing_30d()
         st.dataframe(resultado)
 
-with tab8:
+with with tab8:
     st.header("Métricas ROAS - Onde Investir R$300")
-st.caption("Meta vs Google vs Orgânico - Onde tá o lucro do FC Constrói")
+    st.caption("Meta vs Google vs Orgânico - Onde tá o lucro do FC Constrói")
+
     c1, c2 = st.columns(2)
     with c1:
-        meta_file = st.file_uploader("Meta ADS CSV (custo,cliques,conversoes)", type="csv", key="meta8")
+        meta_file = st.file_uploader("Meta ADS CSV (custo,cliques,conversoes)", type="csv", key="meta")
     with c2:
-        google_file = st.file_uploader("Google ADS CSV", type="csv", key="google8")
-    kiwify_file = st.file_uploader("Kiwify CSV (data_compra,valor,origem,email)", type="csv", key="kiwify8")
-    organico_file = st.file_uploader("Orgânico CSV (views,comentarios,coment_bancada)", type="csv", key="org8")
-    if st.button("Calcular CAC CPA ROAS e Gerar Relatório", key="btn_metrics8"):
-        if not kiwify_file:
-            df_kiwify = pd.DataFrame({
-                'data_compra': ['2026-10-15','2026-10-16','2026-10-17','2026-10-17','2026-10-18'],
-                'valor': [99.90, 49.90, 99.90, 99.90, 49.90],
-                'origem': ['meta','meta','google','organico','organico'],
-                'email': ['a@a.com','b@b.com','c@c.com','d@d.com','e@e.com']
-            })
-        else:
-            df_kiwify = pd.read_csv(kiwify_file)
-        if not meta_file:
-            df_meta = pd.DataFrame({'custo': [200, 150], 'cliques': [500, 300], 'conversoes': [2, 1]})
-        else:
-            df_meta = pd.read_csv(meta_file)
-        if not google_file:
-            df_google = pd.DataFrame({'custo': [180], 'cliques': [200], 'conversoes': [1]})
-        else:
-            df_google = pd.read_csv(google_file)
-        if not organico_file:
-            df_org = pd.DataFrame({'views': [5000, 3000], 'comentarios': [100, 80], 'coment_bancada': [40, 30]})
-        else:
-            df_org = pd.read_csv(organico_file)
-        meta_metrics = calcular_metricas_pagas(df_meta, df_kiwify, "meta")
-        google_metrics = calcular_metricas_pagas(df_google, df_kiwify, "google")
-        df_kiwify_org = df_kiwify[df_kiwify['origem'] == 'organico'] if 'origem' in df_kiwify.columns else pd.DataFrame()
-        org_metrics = calcular_metricas_organicas(df_org, df_kiwify_org)
-        df_comp = pd.DataFrame([meta_metrics, google_metrics, org_metrics])
-        st.subheader("📊 Comparativo Lucro")
-        st.dataframe(df_comp, width='stretch')
-        st.subheader("📈 ROAS por Canal")
-        st.bar_chart(df_comp.set_index('plataforma')['ROAS'])
-        st.subheader("💡 Onde investir")
-        rec = gerar_recomendacao(df_comp)
-        st.text_area("Relatório", rec, height=300, key="rec8")
-        csv = df_comp.to_csv(index=False).encode('utf-8')
-        st.download_button("Baixar Relatório", csv, "relatorio_cac_roas.csv", "text/csv", key="dl8")
+        google_file = st.file_uploader("Google ADS CSV", type="csv", key="google")
+
+    kiwify_file = st.file_uploader("Kiwify CSV (data_compra,valor,origem,email)", type="csv", key="kiwify")
+    org_file = st.file_uploader("Orgânico CSV (views,comentarios,coment_bancada)", type="csv", key="org")
+
+    if st.button("Calcular CAC CPA ROAS e Gerar Relatório"):
+        st.success("Calculando... (liga com metrics_paid_organic.py)")
+        
