@@ -27,7 +27,7 @@ with tab3:
     st.write("Dashboard geral")
 
 with tab4:
-    st.header("Aba 4 - Thumbnail 1080x1920")
+    st.header("Thumbnail 1080x1920")
     gancho4 = st.text_input("Gancho", key="g4")
     if st.button("Gerar 3 Modelos", key="btn_thumb"):
         if gancho4:
@@ -36,7 +36,7 @@ with tab4:
                 st.image(arq)
 
 with tab5:
-    st.header("Aba 5 - YouTube Pack - 2 Negócios")
+    st.header("YouTube Pack - 2 Negócios")
     tipo_negocio = st.selectbox("Tipo:", ["AUTO (detecta sozinho)", "SERVICO_LOCAL", "CURSO_ONLINE"], key="tipo_final")
     cidade_servico = st.selectbox("Cidade serviço:", ["", "Irará", "Santanópolis", "Feira de Santana", "Água Fria", "Ouriçanga", "Santa Bárbara", "Serrinha"], key="cidade_final")
     gancho5 = st.text_input("Gancho", key="g5")
@@ -53,7 +53,7 @@ with tab5:
                 st.text_area("Descricao", pack["descricao"], height=300, key="desc5")
 
 with tab7:
-    st.header("Aba 7 - Remarketing 30d - R$49,90")
+    st.header("Remarketing 30d - R$49,90")
     kiwify_file = st.file_uploader("CSV Kiwify", type="csv", key="kiwify7")
     manychat_file = st.file_uploader("CSV ManyChat", type="csv", key="manychat7")
     if st.button("Filtrar R$49,90", key="btn_rem7"):
@@ -61,8 +61,8 @@ with tab7:
         st.dataframe(resultado)
 
 with tab8:
-    st.header("Aba 8 - CAC, CPA, CPC, ROAS - Onde investir")
-    st.write("Meta vs Google vs Orgânico - Onde tá o lucro")
+    st.header("Métricas ROAS - Onde Investir R$300")
+st.caption("Meta vs Google vs Orgânico - Onde tá o lucro do FC Constrói")
     c1, c2 = st.columns(2)
     with c1:
         meta_file = st.file_uploader("Meta ADS CSV (custo,cliques,conversoes)", type="csv", key="meta8")
