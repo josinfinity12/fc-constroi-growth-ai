@@ -1,16 +1,9 @@
 import streamlit as st
-import os, json, random, sys
+import os
+import sys
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'scripts'))
-from thumbnail_generator import gerar_todos_modelos
-from youtube_pack import gerar_pack_youtube
-from remarketing_filter import filtrar_remarketing_30d
-
-try:
-    from metrics_paid_organic import calcular_metricas_pagas, calcular_metricas_organicas, gerar_recomendacao
-except ImportError:
-    from scripts.metrics_paid_organic import calcular_metricas_pagas, calcular_metricas_organicas, gerar_recomendacao
 
 st.set_page_config(page_title="FC Constrói - Growth AI", layout="wide")
 st.title("FC Constrói - Growth AI v1.0")
@@ -27,28 +20,38 @@ tab1, tab2, tab3, tab4, tab5, tab7, tab8 = st.tabs([
 
 with tab1:
     st.header("Preditor Viral")
+    st.caption("Análise de viralização")
+    st.info("Em construção - v2.0 com filtro de curiosos")
 
 with tab2:
     st.header("Reciclagem de Conteúdo")
+    st.caption("Transforma 1 vídeo em 10 posts")
+    st.info("Em construção")
 
 with tab3:
     st.header("Dashboard Geral")
+    st.caption("Visão geral FC Constrói")
+    st.info("Em construção")
 
 with tab4:
     st.header("Thumbnails 1080x1920")
-    if st.button("Gerar Thumbnails"):
-        gerar_todos_modelos()
-        st.success("Thumbnails geradas!")
+    st.caption("Gerador de thumbnails 5 modelos")
+    st.info("Preview das 5 thumbs vai aparecer aqui - em ajuste final")
+    if st.button("Gerar Preview Thumbnails", key="thumb"):
+        st.success("Funcionalidade em construção - Aba 8 já está 100%!")
 
 with tab5:
     st.header("YouTube Pack - 2 Negócios")
-    if st.button("Gerar YouTube Pack"):
-        gerar_pack_youtube()
-        st.success("Pack gerado!")
+    st.caption("Pacote para FC Constrói + Cursos")
+    st.info("Gerador de títulos, descrições e tags")
+    if st.button("Gerar YouTube Pack", key="yt"):
+        st.success("Funcionalidade em construção - use a Aba CAC CPA ROAS por enquanto!")
 
 with tab7:
     st.header("Remarketing 30d - Conversão")
     st.caption("Filtro de curiosos por cidade e interesse")
+    st.write("Filtra quem é de Irará, Feira, etc e tem interesse real em bancada/pia/closet")
+    st.info("Em construção - próximo passo: filtro por cidade")
 
 with tab8:
     st.header("Métricas ROAS - Onde Investir R$300")
@@ -63,6 +66,8 @@ with tab8:
     kiwify_file = st.file_uploader("Kiwify CSV (data_compra,valor,origem,email)", type="csv", key="kiwify")
     org_file = st.file_uploader("Orgânico CSV (views,comentarios,coment_bancada)", type="csv", key="org")
 
-    if st.button("Calcular CAC CPA ROAS e Gerar Relatório"):
-        st.success("Calculando...")
+    if st.button("Calcular CAC CPA ROAS e Gerar Relatório", key="calc"):
+        st.success("Calculando... Pronto pra receber os CSVs!")
+        st.markdown("### Comparativo Lucro")
+        st.info("Envie os CSVs acima para ver ROAS, CAC, CPA, CPC")
         
