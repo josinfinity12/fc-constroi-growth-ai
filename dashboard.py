@@ -4,10 +4,11 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io
 from datetime import datetime
+from designer import aplicar_design, mostrar_header_com_logo
 
-st.set_page_config(page_title="FC Constrói - Growth AI v2.6.1", layout="wide")
-st.title("FC Constrói - Growth AI v2.6.1")
-st.caption("v2.6.1 - Mantém todas abas originais + Investimentos com Auto Save + PDF")
+st.set_page_config(page_title="FC Constrói - Growth AI v3.0.2", layout="wide", page_icon="🏗️")
+aplicar_design()
+mostrar_header_com_logo()
 
 tab_filtros, tab2, tab3, tab4, tab5, tab8, tab_invest = st.tabs([
     "🔥 FILTROS (Cursos+Local)", 
@@ -22,32 +23,18 @@ tab_filtros, tab2, tab3, tab4, tab5, tab8, tab_invest = st.tabs([
 def mostrar_graficos_ia():
     st.markdown("### 📈 Métricas do Modelo IA - Dashboard Exclusivo")
     c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("Acurácia", "94.2%", "↑ 1.2%")
-        st.progress(94)
-    with c2:
-        st.metric("F1-Score", "0.91", "↑ 0.03")
-        st.progress(91)
-    with c3:
-        st.metric("Correlação", "0.87", "Estável")
-        st.progress(87)
-    with c4:
-        st.metric("ROC-AUC", "0.96", "↑ 0.01")
-        st.progress(96)
+    with c1: st.metric("Acurácia", "94.2%", "↑ 1.2%"); st.progress(94)
+    with c2: st.metric("F1-Score", "0.91", "↑ 0.03"); st.progress(91)
+    with c3: st.metric("Correlação", "0.87", "Estável"); st.progress(87)
+    with c4: st.metric("ROC-AUC", "0.96", "↑ 0.01"); st.progress(96)
     col_g1, col_g2 = st.columns(2)
     with col_g1:
         st.write("**Correlação 0.87 - Previsão vs Real**")
-        chart_data = pd.DataFrame({
-            "Real": np.random.uniform(60, 100, 20),
-            "Previsto": np.random.uniform(62, 98, 20)
-        })
+        chart_data = pd.DataFrame({"Real": np.random.uniform(60, 100, 20),"Previsto": np.random.uniform(62, 98, 20)})
         st.scatter_chart(chart_data)
     with col_g2:
         st.write("**ROC Curve 0.96**")
-        roc_data = pd.DataFrame({
-            "Taxa Falso Positivo": [0, 0.1, 0.2, 0.35, 0.6, 1],
-            "Taxa Verdadeiro Positivo": [0, 0.7, 0.85, 0.92, 0.96, 1]
-        })
+        roc_data = pd.DataFrame({"Taxa Falso Positivo": [0, 0.1, 0.2, 0.35, 0.6, 1],"Taxa Verdadeiro Positivo": [0, 0.7, 0.85, 0.92, 0.96, 1]})
         st.line_chart(roc_data, x="Taxa Falso Positivo", y="Taxa Verdadeiro Positivo")
 
 def filtrar_curso_online(texto):
@@ -56,41 +43,28 @@ def filtrar_curso_online(texto):
     interesses_neg = ["gesso", "drywall", "marcenaria madeira", "mdf", "mármore natural", "granito"]
     curiosos = ["gratis", "grátis", "free", "de graça", "como fazer sozinho", "tem no youtube"]
     idioma_neg = ["how to", "free course", "tutorial english"]
-    if any(x in texto_l for x in idioma_neg):
-        return "REPROVADO - Idioma não é PT-BR"
-    if any(x in texto_l for x in interesses_neg) and not any(y in texto_l for y in interesses_pos):
-        return "REPROVADO - Fora de porcelanato/ceramica"
-    if any(x in texto_l for x in curiosos):
-        return "REPROVADO - Curioso grátis"
-    if any(x in texto_l for x in interesses_pos):
-        return "APROVADO - Lead Curso Porcelanato"
+    if any(x in texto_l for x in idioma_neg): return "REPROVADO - Idioma não é PT-BR"
+    if any(x in texto_l for x in interesses_neg) and not any(y in texto_l for y in interesses_pos): return "REPROVADO - Fora de porcelanato/ceramica"
+    if any(x in texto_l for x in curiosos): return "REPROVADO - Curioso grátis"
+    if any(x in texto_l for x in interesses_pos): return "APROVADO - Lead Curso Porcelanato"
     return "REPROVADO - Sem interesse claro"
 
 def filtrar_local_func(texto, cidade_texto, cidade_base_selecionada, raio_km):
-    t = str(texto).lower()
-    c = str(cidade_texto).lower()
-    texto_completo = t + " " + c
+    t = str(texto).lower(); c = str(cidade_texto).lower(); texto_completo = t + " " + c
     cidades_base = ["feira", "feira de santana", "fsa", "irara", "irará", "santanopolis", "santanópolis", "santa barbara", "santa bárbara", "serrinha", "ouricangas", "ouriçangas"]
     interesses_local = ["bancada", "pia", "cozinha", "banheiro", "orçamento", "orcamento", "quanto custa", "valor", "prazo", "urgente"]
     curiosos_local = ["só pesquisando", "so pesquisando", "só olhando", "curiosidade", "lindo", "top", "show"]
     urgencia_pos = ["urgente", "pra hoje", "preciso pra ontem", "orçamento agora", "orcamento agora", "quanto custa", "me chama no zap"]
     if "santanopolis" in texto_completo or "santanópolis" in texto_completo:
-        if any(x in texto_completo for x in interesses_local):
-            return "APROVADO - 🔥 LEAD QUENTISSIMO Santanopolis (Francis)"
+        if any(x in texto_completo for x in interesses_local): return "APROVADO - 🔥 LEAD QUENTISSIMO Santanopolis (Francis)"
     if "salvador" in texto_completo or "são paulo" in texto_completo or "rio de janeiro" in texto_completo:
-        if not any(cid in texto_completo for cid in cidades_base):
-            return f"REPROVADO - Fora do raio {raio_km}km - Salvador/Fora"
-    if "how much" in texto_completo:
-        return "REPROVADO - Idioma"
+        if not any(cid in texto_completo for cid in cidades_base): return f"REPROVADO - Fora do raio {raio_km}km - Salvador/Fora"
+    if "how much" in texto_completo: return "REPROVADO - Idioma"
     tem_cidade_valida = any(cid in texto_completo for cid in cidades_base)
-    if not tem_cidade_valida and cidade_base_selecionada != "Todas":
-        return f"REPROVADO - Fora do raio {raio_km}km"
-    if any(x in texto_completo for x in curiosos_local) and not any(y in texto_completo for y in interesses_local):
-        return "REPROVADO - Curioso sem urgencia"
-    if any(x in texto_completo for x in urgencia_pos):
-        return "APROVADO - Lead Quente Local"
-    if any(x in texto_completo for x in interesses_local):
-        return "APROVADO - Lead Local"
+    if not tem_cidade_valida and cidade_base_selecionada != "Todas": return f"REPROVADO - Fora do raio {raio_km}km"
+    if any(x in texto_completo for x in curiosos_local) and not any(y in texto_completo for y in interesses_local): return "REPROVADO - Curioso sem urgencia"
+    if any(x in texto_completo for x in urgencia_pos): return "APROVADO - Lead Quente Local"
+    if any(x in texto_completo for x in interesses_local): return "APROVADO - Lead Local"
     return "REPROVADO - Sem urgencia"
 
 def criar_thumb_combinada(imagens_pil_list, texto, modo_layout, cor_fundo):
@@ -98,108 +72,77 @@ def criar_thumb_combinada(imagens_pil_list, texto, modo_layout, cor_fundo):
     base = Image.new("RGB", (W, H), cor_fundo)
     if imagens_pil_list:
         if modo_layout == "1 Foto Só (Obra ou Você)":
-            img = imagens_pil_list[0].convert("RGB").resize((W, H), Image.LANCZOS)
-            base.paste(img, (0, 0))
+            img = imagens_pil_list[0].convert("RGB").resize((W, H), Image.LANCZOS); base.paste(img, (0, 0))
         elif modo_layout == "2 Fotos - ANTES / DEPOIS (lado a lado)":
             for i, img_pil in enumerate(imagens_pil_list[:2]):
-                img = img_pil.convert("RGB").resize((W // 2, H), Image.LANCZOS)
-                base.paste(img, (i * (W // 2), 0))
-            draw = ImageDraw.Draw(base)
-            draw.rectangle([(W // 2 - 4, 0), (W // 2 + 4, H)], fill="white")
+                img = img_pil.convert("RGB").resize((W // 2, H), Image.LANCZOS); base.paste(img, (i * (W // 2), 0))
+            ImageDraw.Draw(base).rectangle([(W // 2 - 4, 0), (W // 2 + 4, H)], fill="white")
         elif modo_layout == "2 Fotos - PESSOA + OBRA (lado a lado)":
             for i, img_pil in enumerate(imagens_pil_list[:2]):
-                img = img_pil.convert("RGB").resize((W // 2, H), Image.LANCZOS)
-                base.paste(img, (i * (W // 2), 0))
-            draw = ImageDraw.Draw(base)
-            draw.rectangle([(W // 2 - 3, 0), (W // 2 + 3, H)], fill="white")
+                img = img_pil.convert("RGB").resize((W // 2, H), Image.LANCZOS); base.paste(img, (i * (W // 2), 0))
+            ImageDraw.Draw(base).rectangle([(W // 2 - 3, 0), (W // 2 + 3, H)], fill="white")
         elif modo_layout == "3 Fotos - Grade":
             if len(imagens_pil_list) >= 1:
-                img0 = imagens_pil_list[0].convert("RGB").resize((W // 2, H), Image.LANCZOS)
-                base.paste(img0, (0, 0))
+                img0 = imagens_pil_list[0].convert("RGB").resize((W // 2, H), Image.LANCZOS); base.paste(img0, (0, 0))
             if len(imagens_pil_list) >= 2:
-                img1 = imagens_pil_list[1].convert("RGB").resize((W // 2, H // 2), Image.LANCZOS)
-                base.paste(img1, (W // 2, 0))
+                img1 = imagens_pil_list[1].convert("RGB").resize((W // 2, H // 2), Image.LANCZOS); base.paste(img1, (W // 2, 0))
             if len(imagens_pil_list) >= 3:
-                img2 = imagens_pil_list[2].convert("RGB").resize((W // 2, H // 2), Image.LANCZOS)
-                base.paste(img2, (W // 2, H // 2))
+                img2 = imagens_pil_list[2].convert("RGB").resize((W // 2, H // 2), Image.LANCZOS); base.paste(img2, (W // 2, H // 2))
     overlay = Image.new("RGBA", (W, H), (0, 0, 0, 85))
     base = Image.alpha_composite(base.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(base)
-    try:
-        font = ImageFont.truetype("arialbd.ttf", 110)
-        font_small = ImageFont.truetype("arialbd.ttf", 55)
-    except:
-        font = ImageFont.load_default()
-        font_small = ImageFont.load_default()
+    try: font = ImageFont.truetype("arialbd.ttf", 110); font_small = ImageFont.truetype("arialbd.ttf", 55)
+    except: font = ImageFont.load_default(); font_small = ImageFont.load_default()
     texto = texto.upper()
-    if len(texto) > 18:
-        meio = len(texto) // 2
-        linhas = [texto[:meio], texto[meio:]]
-    else:
-        linhas = [texto]
+    if len(texto) > 18: meio = len(texto) // 2; linhas = [texto[:meio], texto[meio:]]
+    else: linhas = [texto]
     y = H // 2 - 80
     for linha in linhas:
-        bbox = draw.textbbox((0, 0), linha, font=font)
-        w = bbox[2] - bbox[0]
-        x = (W - w) // 2
+        bbox = draw.textbbox((0, 0), linha, font=font); w = bbox[2] - bbox[0]; x = (W - w) // 2
         for dx in [-5, 5]:
-            for dy in [-5, 5]:
-                draw.text((x + dx, y + dy), linha, font=font, fill="black")
-        draw.text((x, y), linha, font=font, fill="white")
-        y += 130
-    draw.rounded_rectangle([(30, H - 90), (290, H - 30)], radius=12, fill="#FF0000")
+            for dy in [-5, 5]: draw.text((x + dx, y + dy), linha, font=font, fill="black")
+        draw.text((x, y), linha, font=font, fill="white"); y += 130
+    draw.rounded_rectangle([(30, H - 90), (290, H - 30)], radius=12, fill="#FF6B00")
     draw.text((45, H - 80), "FC CONSTROI", font=font_small, fill="white")
     return base
 
 def gerar_pdf_investimentos(dados):
     try:
         from fpdf import FPDF
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 10, f"FC Constroi - Relatorio {dados['data']}", ln=True, align='C')
-        pdf.set_font("Arial", "", 11)
-        pdf.ln(8)
+        pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", "B", 16)
+        pdf.cell(0, 10, f"FC CONSTROI - Relatorio {dados['data']}", ln=True, align='C')
+        pdf.set_font("Arial", "", 11); pdf.ln(8)
         for k, v in dados.items():
-            if k != "data":
-                pdf.cell(0, 7, f"{k}: {v}", ln=True)
+            if k != "data": pdf.cell(0, 7, f"{k}: {v}", ln=True)
         return pdf.output(dest='S').encode('latin-1')
     except:
         txt = f"FC CONSTROI - INVESTIMENTOS\nData: {dados['data']}\n\n"
         for k, v in dados.items():
-            if k != "data":
-                txt += f"{k}: {v}\n"
-        img = Image.new('RGB', (800, 1000), 'white')
-        d = ImageDraw.Draw(img)
-        try:
-            f = ImageFont.truetype("arial.ttf", 18)
-        except:
-            f = ImageFont.load_default()
+            if k != "data": txt += f"{k}: {v}\n"
+        img = Image.new('RGB', (800, 1000), 'white'); d = ImageDraw.Draw(img)
+        try: f = ImageFont.truetype("arial.ttf", 18)
+        except: f = ImageFont.load_default()
         d.text((20, 20), txt, font=f, fill='black')
-        buf = io.BytesIO()
-        img.save(buf, format='PDF')
-        return buf.getvalue()
+        buf = io.BytesIO(); img.save(buf, format='PDF'); return buf.getvalue()
 
 def render_investimentos():
     st.subheader("📈 INVESTIMENTOS - Auto Save + PDF")
     st.caption("Mesmos parâmetros + Salvamento automático + Histórico + PDF")
-    if 'historico_inv' not in st.session_state:
-        st.session_state['historico_inv'] = []
-    
+    if 'historico_inv' not in st.session_state: st.session_state['historico_inv'] = []
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("#### 💸 Entradas")
-        faturamento_curso = st.number_input("Faturamento Curso (Kiwify) R$", value=8500.0, step=100.0, key="fat_curso_v261")
-        faturamento_obra = st.number_input("Faturamento Obras Locais R$", value=6200.0, step=100.0, key="fat_obra_v261")
-        outros = st.number_input("Outros (YouTube, parceria) R$", value=0.0, key="outros_v261")
+        faturamento_curso = st.number_input("Faturamento Curso (Kiwify) R$", value=8500.0, step=100.0, key="fat_curso_v302")
+        faturamento_obra = st.number_input("Faturamento Obras Locais R$", value=6200.0, step=100.0, key="fat_obra_v302")
+        outros = st.number_input("Outros (YouTube, parceria) R$", value=0.0, key="outros_v302")
         faturamento_total = faturamento_curso + faturamento_obra + outros
         st.metric("Faturamento Total", f"R$ {faturamento_total:,.2f}")
     with c2:
         st.markdown("#### 💳 Custos / Investimentos")
-        gasto_trafego = st.number_input("Tráfego Pago (Meta/Google) R$", value=1200.0, step=50.0, key="traf_v261")
-        custo_material = st.number_input("Material / Porcelanato / Insumos R$", value=2800.0, step=100.0, key="mat_v261")
-        custo_ferramentas = st.number_input("Ferramentas / Aluguel / Gasolina R$", value=450.0, key="ferr_v261")
-        taxas = st.number_input("Taxas Kiwify + Impostos (15%) R$", value=faturamento_curso*0.15, key="taxas_v261")
+        gasto_trafego = st.number_input("Tráfego Pago (Meta/Google) R$", value=1200.0, step=50.0, key="traf_v302")
+        custo_material = st.number_input("Material / Porcelanato / Insumos R$", value=2800.0, step=100.0, key="mat_v302")
+        custo_ferramentas = st.number_input("Ferramentas / Aluguel / Gasolina R$", value=450.0, key="ferr_v302")
+        taxas = st.number_input("Taxas Kiwify + Impostos (15%) R$", value=faturamento_curso*0.15, key="taxas_v302")
         custo_total = gasto_trafego + custo_material + custo_ferramentas + taxas
         st.metric("Custo Total", f"R$ {custo_total:,.2f}")
     with c3:
@@ -214,7 +157,6 @@ def render_investimentos():
         st.metric("Lucro Líquido (Ganância real)", f"R$ {lucro_liquido:,.2f}", f"{margem_liquida:.1f}% margem")
         st.metric("ROI", f"{roi:.1f}%")
         st.metric("ROAS Geral", f"{roas:.2f}x")
-    
     st.divider()
     col_graf1, col_graf2, col_graf3 = st.columns(3)
     with col_graf1:
@@ -228,22 +170,18 @@ def render_investimentos():
     with col_graf3:
         st.write("**Saúde do Negócio**")
         st.progress(int(min(max(margem_liquida, 0), 100)))
-        if margem_liquida >= 30:
-            st.success(f"Margem {margem_liquida:.1f}% - EXCELENTE!")
-        elif margem_liquida >= 15:
-            st.warning(f"Margem {margem_liquida:.1f}% - Boa")
-        else:
-            st.error(f"Margem {margem_liquida:.1f}% - ALERTA!")
-
+        if margem_liquida >= 30: st.success(f"Margem {margem_liquida:.1f}% - EXCELENTE!")
+        elif margem_liquida >= 15: st.warning(f"Margem {margem_liquida:.1f}% - Boa")
+        else: st.error(f"Margem {margem_liquida:.1f}% - ALERTA!")
     st.divider()
     st.markdown("#### 🎯 Métricas Avançadas (CAC, Ticket, LTV)")
     cc1, cc2, cc3, cc4 = st.columns(4)
     with cc1:
-        vendas = st.number_input("Vendas fechadas", value=8, min_value=1, key="vendas_v261")
+        vendas = st.number_input("Vendas fechadas", value=8, min_value=1, key="vendas_v302")
         ticket_medio = faturamento_total / vendas if vendas else 0
         st.metric("Ticket Médio", f"R$ {ticket_medio:,.2f}")
     with cc2:
-        leads = st.number_input("Leads no mês", value=45, key="leads_v261")
+        leads = st.number_input("Leads no mês", value=45, key="leads_v302")
         cac = (gasto_trafego / vendas) if vendas else 0
         st.metric("CAC (Custo por Cliente)", f"R$ {cac:,.2f}")
     with cc3:
@@ -253,12 +191,10 @@ def render_investimentos():
         ltv = ticket_medio * 1.8
         ltv_cac = (ltv / cac) if cac else 0
         st.metric("LTV / CAC", f"{ltv_cac:.1f}x", help="Ideal >3x")
-
     st.divider()
     st.markdown("### 💾 Salvar Automático + Exportar PDF")
-    auto = st.checkbox("✅ Ativar SALVAR AUTOMÁTICO", value=True, key="auto_save")
+    auto = st.checkbox("✅ Ativar SALVAR AUTOMÁTICO", value=True, key="auto_save_v302")
     col_save, col_pdf, col_hist = st.columns([1, 1, 2])
-    
     dados_atual = {
         "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "Faturamento Total": f"R$ {faturamento_total:,.2f}",
@@ -274,17 +210,14 @@ def render_investimentos():
         "Conversao": f"{conversao:.1f}%",
         "LTV/CAC": f"{ltv_cac:.1f}x"
     }
-
     with col_save:
         if st.button("💾 SALVAR AGORA", use_container_width=True, type="primary") or (auto and st.session_state.get('last_save') != faturamento_total):
             st.session_state['historico_inv'].append(dados_atual)
             st.session_state['last_save'] = faturamento_total
             st.success(f"Salvo! {len(st.session_state['historico_inv'])} registros")
-    
     with col_pdf:
         pdf_bytes = gerar_pdf_investimentos(dados_atual)
         st.download_button("📄 BAIXAR PDF RELATÓRIO", data=pdf_bytes, file_name=f"relatorio_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf", mime="application/pdf", use_container_width=True)
-    
     with col_hist:
         if st.session_state['historico_inv']:
             df_hist = pd.DataFrame(st.session_state['historico_inv'])
@@ -293,14 +226,12 @@ def render_investimentos():
         else:
             st.info("Nenhum histórico. Clique em Salvar.")
 
-# ========== ABAS ORIGINAIS 100% PRESERVADAS ==========
 with tab_filtros:
     col_f1, col_f2 = st.columns(2, gap="large")
     with col_f1:
         st.subheader("🔥 FILTRO 1: Curso Online Porcelanato")
         st.caption("Só porcelanato/cerâmica + PT-BR")
-        texto_curso = st.text_area("Comentários Curso (1 por linha)", height=180, 
-            value="quero aprender bancada de porcelanato\npia de banheiro porcelanato quanto custa curso\ncurso gratis de gesso how to free", key="t1")
+        texto_curso = st.text_area("Comentários Curso (1 por linha)", height=180, value="quero aprender bancada de porcelanato\npia de banheiro porcelanato quanto custa curso\ncurso gratis de gesso how to free", key="t1")
         file_curso = st.file_uploader("CSV Curso", type="csv", key="curso")
         if st.button("FILTRAR CURSO", key="f1", use_container_width=True):
             dados = []
@@ -325,8 +256,7 @@ with tab_filtros:
             cidade_filtro = st.selectbox("Base:", ["Santanopolis (PRIORIDADE)", "Irara", "Feira de Santana", "Santa Barbara", "Serrinha", "Ouricangas", "Todas"], index=0, key="cidade")
         with c2:
             raio = st.slider("Raio km", 10, 150, 50, key="raio")
-        texto_local = st.text_area("Mensagens Local (1 por linha)", height=180, 
-            value="sou de Irara, quanto custa bancada 2m urgente\nFeira pia banheiro orcamento pra hoje\nsou de Salvador Bahia, quanto custa bancada 2m", key="t2")
+        texto_local = st.text_area("Mensagens Local (1 por linha)", height=180, value="sou de Irara, quanto custa bancada 2m urgente\nFeira pia banheiro orcamento pra hoje\nsou de Salvador Bahia, quanto custa bancada 2m", key="t2")
         file_local = st.file_uploader("CSV Local", type="csv", key="local")
         if st.button("FILTRAR LOCAL 50km", key="f2", use_container_width=True):
             dados = []
@@ -372,12 +302,7 @@ with tab4:
     st.caption("Pessoa + Obra / Antes Depois - Formato YouTube 16:9")
     col_a, col_b = st.columns([1.2, 0.8], gap="large")
     with col_a:
-        modo = st.selectbox("LAYOUT 1280x720:", [
-            "1 Foto Só (Obra ou Você)",
-            "2 Fotos - ANTES / DEPOIS (lado a lado)",
-            "2 Fotos - PESSOA + OBRA (lado a lado)",
-            "3 Fotos - Grade"
-        ], index=2, key="layout_thumb")
+        modo = st.selectbox("LAYOUT 1280x720:", ["1 Foto Só (Obra ou Você)","2 Fotos - ANTES / DEPOIS (lado a lado)","2 Fotos - PESSOA + OBRA (lado a lado)","3 Fotos - Grade"], index=2, key="layout_thumb")
         if "1 Foto" in modo:
             up = st.file_uploader("Sobe 1 foto", type=["jpg", "png", "jpeg"], key="1foto")
             files = [up] if up else []
@@ -385,12 +310,11 @@ with tab4:
             up = st.file_uploader("Sobe 2 ou 3 fotos (na ordem)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="multifoto")
             files = up if up else []
         texto_thumb = st.text_input("Texto da Thumb (max 4 palavras)", "BANCADA 2M", key="txt_thumb")
-        cor_fundo = st.color_picker("Cor de fundo (se não tiver foto)", "#FF0000", key="cor_thumb")
+        cor_fundo = st.color_picker("Cor de fundo (se não tiver foto)", "#FF6B00", key="cor_thumb")
         estilo = st.selectbox("Estilo:", ["Com escurecer (recomendado)", "Foto original"], key="estilo")
         if st.button("🔥 GERAR THUMB AUTOMÁTICA 1280x720", use_container_width=True, type="primary"):
             pil_list = [Image.open(f) for f in files if f]
-            if not pil_list:
-                st.warning("Sobe pelo menos 1 foto!")
+            if not pil_list: st.warning("Sobe pelo menos 1 foto!")
             else:
                 thumb = criar_thumb_combinada(pil_list, texto_thumb, modo, cor_fundo)
                 st.session_state['thumb_comb'] = thumb
@@ -399,8 +323,7 @@ with tab4:
         if 'thumb_comb' in st.session_state:
             st.write("**Preview 1280x720:**")
             st.image(st.session_state['thumb_comb'], use_container_width=True)
-            buf = io.BytesIO()
-            st.session_state['thumb_comb'].save(buf, format="PNG")
+            buf = io.BytesIO(); st.session_state['thumb_comb'].save(buf, format="PNG")
             st.download_button("⬇️ BAIXAR THUMB 1280x720 PNG", buf.getvalue(), f"thumb_{texto_thumb}_1280x720.png", "image/png", use_container_width=True)
         else:
             st.info("Sobe fotos e gera - formato 1280x720")
@@ -432,3 +355,4 @@ with tab8:
 
 with tab_invest:
     render_investimentos()
+
