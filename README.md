@@ -1,44 +1,31 @@
-﻿# 🏗️ FC Constrói - Growth AI v1.0
+﻿# 🏗️ FC CONSTRÓI • GROWTH AI v3.1.5
 
-### IA que prevê viralização de conteúdo de obra e acabamento
+> Dashboard completo de Growth para loja de porcelanato + cursos online. 7 abas, IA preditiva, controle de ROAS e geração de conteúdo.
 
-> De 1 a cada 5 vídeos viralizando (20%) para **1 a cada 2 (40%)** usando Ciência de Dados.
-
-[![Python 3.15](https://img.shields.io/badge/Python-3.15-blue)]()
-[![Score IA 95%](https://img.shields.io/badge/Score_IA-95%25-success)]()
-[![Taxa Viral 40%](https://img.shields.io/badge/Taxa_Viral-40%25-orange)]()
-
-**Live:** http://localhost:8501 | **GitHub:** josinfinity12/fc-constroi-growth-ai
+**🔗 App no ar 24h:**  
+https://josinfinity12-fc-constroi-growth-ai-dashboard-47vlqz.streamlit.app
 
 ---
 
-### 🚀 Métricas Reais - 18/10/2026
+### 🔥 7 ABAS COMPLETAS
 
-| Métrica | Antes | Agora |
-| :--- | :--- | :--- |
-| **Taxa Viral** | 20% (1/5) | **40% (1/2)** |
-| **Maior Reel** | 8k views | **185.000 views** |
-| **Score IA** | Manual | **95% POSTA** |
+| Aba | O que faz |
+|---|---|
+| **🔥 FILTROS (Cursos+Local)** | Filtra leads de curso online vs obra local em 6 cidades (Irará, Feira, Santanópolis PRIORIDADE, Santa Bárbara, Serrinha, Ouricangas) com raio KM |
+| **♻️ Reciclar Conteúdo** | Pega 1 vídeo longo do YouTube e gera 3 versões (Shorts + Reels + Descrição) |
+| **📊 Dashboard + Gráficos IA** | Métricas IA: Acurácia 94.2%, F1 0.91, Correlação 0.87, ROC-AUC 0.96 + Leads semana |
+| **🎨 Thumbnails** | Gerador 1280x720 com 4 layouts: 1 foto, 2 fotos ANTES/DEPOIS, PESSOA+OBRA, Grade 3 fotos + texto com contorno |
+| **📦 YouTube Pack** | Gera títulos, descrição e tags para Curso Online ou Obras Locais |
+| **💰 CAC CPA ROAS** | Onde investir R$300 - Compara Meta ADS vs Google ADS vs Orgânico |
+| **📈 INVESTIMENTOS** | Controle completo: Faturamento Curso + Obras, Custos, Lucro, ROI, ROAS, CAC, LTV + Auto Save + PDF |
 
-**Case que viralizou:** `bancada_com_gaveta` + Gancho `Olha o erro que 90% faz` + Legenda Queimada + CTA `Comenta BANCA`
+---
 
-### 🧠 O que a IA descobriu?
-
-1. Gancho de ERRO retém 2.3x mais que gancho de benefício
-2. Tempo Gold: 12-18 segundos (15s ideal)
-3. Legenda Queimada = +30 pontos no Score
-4. CTA Comentário gera 18x mais que "Me segue"
-
-### 🛠️ Como rodar
+### 🚀 Como rodar local
 
 ```bash
 git clone https://github.com/josinfinity12/fc-constroi-growth-ai.git
+cd fc-constroi-growth-ai
 pip install -r requirements.txt
 streamlit run dashboard.py
-## 📊 Métricas do Modelo (Data Science)
 
-**Acurácia: 94% | F1-Score: 94% | Correlação Score x Viral: 0.87**
-
-![Métricas](reports/correlacao_score_viral.png)
-
-> Modelo RandomForest treinado com 187 vídeos. Gancho nos 3s iniciais responde por 42% da viralização.
