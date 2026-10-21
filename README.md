@@ -1,7 +1,7 @@
 # 🏗️ FC CONSTRÓI • GROWTH AI v3.3.8 AUTO ONLINE
 > PUXA INSTA + GERA THUMB 1280x720 AUTOMÁTICO
 > Baseado no v3.1.5 (7 abas) -> v3.3.8 (9 abas + SUPABASE KIWIFY + LOOP VIRAL + THUMBNAIL 1280x720)
-> REGRA: NUNCA DELETAR NADA - SÓ ADICIONAR/CORRIGIR
+
 
 **🔗 App no ar 24h:**  
 https://josinfinity12-fc-constroi-growth-ai-dashboard-47vlqz.streamlit.app
