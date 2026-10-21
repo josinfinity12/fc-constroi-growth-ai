@@ -38,6 +38,94 @@ try:
 except ImportError:
     HAS_PLOTLY = False
 
+# ============================================================
+# >>> ADIÇÃO NOVA - FUNÇÕES SUPABASE KIWIFY - APENAS AGREGAR
+# ============================================================
+def extrair_filtros_sck(sck_full: str):
+    """Extrai cidade, interesse, plataforma e traffic do SCK da Kiwify - v3.3.0"""
+    s = str(sck_full).lower()
+    plat = "wix"
+    if "instagram" in s: plat = "instagram"
+    elif "tiktok" in s: plat = "tiktok"
+    elif "kwai" in s: plat = "kwai"
+    elif "facebook" in s or "fb_" in s or "_fb" in s: plat = "facebook"
+    elif "youtube" in s or "yt_" in s: plat = "youtube"
+    
+    cid = "irara"
+    if "feira" in s: cid = "feira"
+    elif "salvador" in s or "ssa" in s: cid = "salvador"
+    elif "santanopolis" in s: cid = "santanopolis"
+    
+    inter = "porcelanato"
+    if "pia" in s: inter = "pia_esculpida"
+    elif "nicho" in s: inter = "nicho_led"
+    elif "gaveta" in s: inter = "gaveta"
+    elif "base" in s: inter = "base_300kg"
+    
+    pago = "fb_" in s or "google_" in s or "cpc" in s or "pago" in s
+    traffic = "pago" if pago else "organico"
+    return plat, cid, inter, traffic
+
+def salvar_venda_kiwify_teste(sck_teste: str, email_teste="teste@irara.com"):
+    """Função pra testar sem pagar na Kiwify - salva direto no Supabase"""
+    try:
+        supa_url = os.getenv("SUPABASE_URL")
+        supa_key = os.getenv("SUPABASE_KEY")
+        try:
+            if not supa_url:
+                supa_url = st.secrets.get("SUPABASE_URL", "")
+            if not supa_key:
+                supa_key = st.secrets.get("SUPABASE_KEY", "")
+        except:
+            pass
+        if not supa_url or not supa_key:
+            return False, "Sem SUPABASE_URL/KEY no Environment"
+        from supabase import create_client
+        supa = create_client(supa_url, supa_key)
+        plat, cid, inter, traffic = extrair_filtros_sck(sck_teste)
+        payload = {
+            "sck": sck_teste,
+            "sck_completo": sck_teste,
+            "cidade": cid,
+            "interesse": inter,
+            "plataforma": plat,
+            "traffic_type": traffic,
+            "utm_campaign": "topo",
+            "utm_source": plat,
+            "utm_medium": traffic,
+            "email": email_teste,
+            "valor": 99.90,
+            "status": "paid"
+        }
+        supa.table("vendas_kiwify").insert(payload).execute()
+        return True, payload
+    except Exception as e:
+        return False, str(e)
+
+def buscar_vendas_reais_supabase():
+    """Busca vendas reais do Supabase - pra usar na TAB 8"""
+    try:
+        supa_url = os.getenv("SUPABASE_URL")
+        supa_key = os.getenv("SUPABASE_KEY")
+        try:
+            if not supa_url:
+                supa_url = st.secrets.get("SUPABASE_URL", "")
+            if not supa_key:
+                supa_key = st.secrets.get("SUPABASE_KEY", "")
+        except:
+            pass
+        if not supa_url or not supa_key:
+            return []
+        from supabase import create_client
+        supa = create_client(supa_url, supa_key)
+        res = supa.table("vendas_kiwify").select("*").order("created_at", desc=True).limit(100).execute()
+        return res.data if res.data else []
+    except:
+        return []
+# ============================================================
+# >>> FIM ADIÇÃO NOVA
+# ============================================================
+
 # Config
 st.set_page_config(
     page_title="FC CONSTROI • GROWTH AI v3.3.0",
@@ -354,32 +442,30 @@ with tab7:
 
 # TAB 8 - VENDAS KIWIFY + SUPABASE
 with tab8:
-    st.subheader("💚 VENDAS Kiwify - SUPABASE TRACKING (mantido!)")
-    st.success("✅ Supabase conectado - Trackeando vendas Kiwify em tempo real - Webhook ativo")
-
-    df_vendas = pd.DataFrame([
-        {"id": "kiwify_001", "produto": "Marmoraria na Prática", "valor": 497, "status": "approved", "origem": "gaveta viral (48k)", "data": "20/10/2026 22:00", "cliente": "João - Irará"},
-        {"id": "kiwify_002", "produto": "Cozinha Planejada", "valor": 297, "status": "approved", "origem": "pia 10k (32k)", "data": "19/10/2026 18:00", "cliente": "Maria - Feira"},
-        {"id": "kiwify_003", "produto": "Porcelanato Estrutural", "valor": 99.9, "status": "approved", "origem": "base 300kg (28k)", "data": "19/10/2026 14:00", "cliente": "José - Santanópolis"},
-        {"id": "kiwify_004", "produto": "Marmoraria na Prática", "valor": 497, "status": "waiting_payment", "origem": "gaveta", "data": "20/10/2026 21:30", "cliente": "Ana - Água Fria"},
-        {"id": "kiwify_005", "produto": "Marmoraria na Prática", "valor": 497, "status": "approved", "origem": "gaveta", "data": "20/10/2026 20:00", "cliente": "Carlos - Ouriçangas"},
-        {"id": "kiwify_006", "produto": "Cozinha Planejada", "valor": 297, "status": "approved", "origem": "pia", "data": "20/10/2026 19:00", "cliente": "Patrícia - Pedrão"},
-        {"id": "kiwify_007", "produto": "Marmoraria na Prática", "valor": 497, "status": "approved", "origem": "gaveta", "data": "20/10/2026 18:00", "cliente": "Roberto - Irará"},
-    ])
-    st.dataframe(df_vendas, use_container_width=True)
-
-    col_k1, col_k2, col_k3, col_k4 = st.columns(4)
-    col_k1.metric("Total Vendas", "7 vendas", "R$ 3.477")
-    col_k2.metric("Aprovadas", "6", "85% aprovação")
-    col_k3.metric("Origem Top", "Gaveta 48k", "4 vendas")
-    col_k4.metric("Ticket Médio", "R$ 368", "Kiwify")
+    st.subheader("💚 VENDAS Kiwify - SUPABASE TRACKING REAL (v3.3.0)")
+    # AGORA MOSTRA DADOS REAIS SE TIVER
+    vendas_reais_tab8 = buscar_vendas_reais_supabase()
+    if vendas_reais_tab8:
+        st.success(f"✅ Supabase conectado - {len(vendas_reais_tab8)} vendas reais encontradas!")
+        df_real = pd.DataFrame(vendas_reais_tab8)
+        st.dataframe(df_real, use_container_width=True)
+        col_k1, col_k2, col_k3, col_k4 = st.columns(4)
+        col_k1.metric("Total Real", f"{len(df_real)} vendas")
+        col_k2.metric("Cidades", f"{df_real['cidade'].nunique()} cidades")
+        col_k3.metric("Plataformas", f"{df_real['plataforma'].nunique()}")
+        col_k4.metric("Faturamento Real", f"R$ {df_real['valor'].sum():.2f}")
+    else:
+        st.info("ℹ️ Nenhuma venda real ainda no Supabase - Mostrando exemplo mockado abaixo (use o teste na sidebar pra criar a primeira)")
+        df_vendas = pd.DataFrame([
+            {"id": "kiwify_001", "produto": "Marmoraria na Prática", "valor": 497, "status": "approved", "origem": "gaveta viral (48k)", "data": "20/10/2026 22:00", "cliente": "João - Irará"},
+            {"id": "kiwify_002", "produto": "Cozinha Planejada", "valor": 297, "status": "approved", "origem": "pia 10k (32k)", "data": "19/10/2026 18:00", "cliente": "Maria - Feira"},
+            {"id": "kiwify_003", "produto": "Porcelanato Estrutural", "valor": 99.9, "status": "approved", "origem": "base 300kg (28k)", "data": "19/10/2026 14:00", "cliente": "José - Santanópolis"},
+        ])
+        st.dataframe(df_vendas, use_container_width=True)
 
     st.code("""
-# scripts/fc-webhook-kiwify - mantido!
-@app.route('/webhook/kiwify', methods=['POST'])
-def webhook_kiwify():
-    data = request.json
-    supabase.table("vendas_kiwify").insert(data).execute()
+# Webhook Kiwify agora salva automatico: cidade, interesse, plataforma, traffic_type
+# SCK exemplo: fb_feira_pia_organico -> facebook | feira | pia_esculpida | pago
     """, language="python")
 
 # TAB 9 - INSTA AUTO + LOOP VIRAL
@@ -426,5 +512,33 @@ Avaliado em R$27k
 </small></center>
 """, unsafe_allow_html=True)
 
+# ============================================================
+# >>> ADIÇÃO 2 - TESTE KIWIFY SEM PAGAR - SIDEBAR - APENAS AGREGAR
+# ============================================================
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("### 🧪 TESTE KIWIFY (NOVO)")
+    st.caption("Testa sem pagar na Kiwify - prova que cai no Supabase")
+    sck_teste = st.text_input("SCK teste", "fb_feira_pia_organico", key="sck_teste_sidebar_novo")
+    email_teste = st.text_input("Email teste", "teste@irara.com", key="email_teste_sidebar")
+    if st.button("💾 Salvar venda TESTE no Supabase", key="btn_teste_supabase_novo"):
+        ok, resp = salvar_venda_kiwify_teste(sck_teste, email_teste)
+        if ok:
+            st.success(f"✅ Salvo! {resp}")
+            st.balloons()
+        else:
+            st.error(f"❌ Erro: {resp}")
 
-
+    st.markdown("---")
+    st.markdown("**Vendas Reais Supabase (prova)**")
+    vendas_reais = buscar_vendas_reais_supabase()
+    if vendas_reais:
+        df_real_side = pd.DataFrame(vendas_reais)
+        if not df_real_side.empty:
+            cols_show = [c for c in ["cidade","interesse","plataforma","traffic_type"] if c in df_real_side.columns]
+            if cols_show:
+                st.dataframe(df_real_side[cols_show].head(10), use_container_width=True)
+        st.metric("Total no banco", len(vendas_reais))
+    else:
+        st.caption("Nenhuma venda ainda ou sem env vars")
+        
