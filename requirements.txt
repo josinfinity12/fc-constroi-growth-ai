@@ -17,3 +17,4 @@ fpdf
 flask
 supabase
 gunicorn
+yt-dlp
