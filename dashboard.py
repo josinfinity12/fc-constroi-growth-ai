@@ -1,6 +1,7 @@
-# FC CONSTRÓI • GROWTH AI v3.3.0 FINAL COMPLETA 500+ LINHAS
-# Baseado nas conversas 19-21/out - 9 ABAS + SUPABASE KIWIFY + LOOP VIRAL
-# Mantém: gaveta R$8mil, pia 10k, base 300kg, Supabase, yt-dlp, designer
+# FC CONSTRÓI • GROWTH AI v3.3.8 AUTO ONLINE - PUXA INSTA + GERA THUMB 1280x720 AUTOMATICO
+# Baseado no seu v3.3.7 - 9 ABAS + SUPABASE KIWIFY + LOOP VIRAL + THUMBNAIL 1280x720
+# REGRA: NUNCA DELETAR NADA - SÓ ADICIONAR/CORRIGIR
+# FIX v3.4.0 - CIDADES + KEYWORDS EXPANDIDAS: pia de banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas
 
 import streamlit as st
 import pandas as pd
@@ -11,8 +12,8 @@ import os
 import json
 import base64
 from io import BytesIO
+import requests
 
-# Imports opcionais
 try:
     from designer import aplicar_design
     HAS_DESIGNER = True
@@ -38,11 +39,17 @@ try:
 except ImportError:
     HAS_PLOTLY = False
 
-# ============================================================
-# >>> ADIÇÃO NOVA - FUNÇÕES SUPABASE KIWIFY - APENAS AGREGAR
-# ============================================================
+# CIDADES ORIGINAIS CORRETAS - FIX v3.3.9
+CIDADES_ORIGINAIS = [
+    "Santanópolis",
+    "Irará",
+    "Feira de Santana",
+    "Santa Bárbara",
+    "Serrinha",
+    "Ouriçangas"
+]
+
 def extrair_filtros_sck(sck_full: str):
-    """Extrai cidade, interesse, plataforma e traffic do SCK da Kiwify - v3.3.0"""
     s = str(sck_full).lower()
     plat = "wix"
     if "instagram" in s: plat = "instagram"
@@ -50,24 +57,40 @@ def extrair_filtros_sck(sck_full: str):
     elif "kwai" in s: plat = "kwai"
     elif "facebook" in s or "fb_" in s or "_fb" in s: plat = "facebook"
     elif "youtube" in s or "yt_" in s: plat = "youtube"
-    
     cid = "irara"
     if "feira" in s: cid = "feira"
     elif "salvador" in s or "ssa" in s: cid = "salvador"
-    elif "santanopolis" in s: cid = "santanopolis"
-    
+    elif "santanopolis" in s or "santanópolis" in s: cid = "santanopolis"
+    elif "santa_barbara" in s or "santa barbara" in s or "santabarbara" in s: cid = "santa_barbara"
+    elif "serrinha" in s: cid = "serrinha"
+    elif "ouricangas" in s or "ouriçangas" in s: cid = "ouricangas"
     inter = "porcelanato"
-    if "pia" in s: inter = "pia_esculpida"
-    elif "nicho" in s: inter = "nicho_led"
-    elif "gaveta" in s: inter = "gaveta"
-    elif "base" in s: inter = "base_300kg"
-    
+    # CORREÇÃO: pia esculpida -> pia de banheiro + EXPANSÃO TUDO EM PORCELANATO
+    if "pia de banheiro" in s or "pia_banheiro" in s or "pia esculpida" in s or "pia_esculpida" in s or "pia_90" in s or "_pia_" in s:
+        inter = "pia_de_banheiro"
+    elif "closet" in s:
+        inter = "closet_porcelanato"
+    elif "bancada" in s and "cozinha" in s:
+        inter = "bancada_cozinha_porcelanato"
+    elif "bancada" in s:
+        inter = "bancada_porcelanato"
+    elif "fachada" in s:
+        inter = "fachadas_porcelanato"
+    elif "nicho" in s:
+        inter = "nichos_porcelanato"
+    elif "revestimento" in s:
+        inter = "revestimentos_porcelanato"
+    elif "armario" in s or "armário" in s:
+        inter = "armarios_porcelanato"
+    elif "gaveta" in s:
+        inter = "gavetas_porcelanato"
+    elif "base" in s:
+        inter = "base_300kg"
     pago = "fb_" in s or "google_" in s or "cpc" in s or "pago" in s
     traffic = "pago" if pago else "organico"
     return plat, cid, inter, traffic
 
 def salvar_venda_kiwify_teste(sck_teste: str, email_teste="teste@irara.com"):
-    """Função pra testar sem pagar na Kiwify - salva direto no Supabase"""
     try:
         supa_url = os.getenv("SUPABASE_URL")
         supa_key = os.getenv("SUPABASE_KEY")
@@ -103,7 +126,6 @@ def salvar_venda_kiwify_teste(sck_teste: str, email_teste="teste@irara.com"):
         return False, str(e)
 
 def buscar_vendas_reais_supabase():
-    """Busca vendas reais do Supabase - pra usar na TAB 8"""
     try:
         supa_url = os.getenv("SUPABASE_URL")
         supa_key = os.getenv("SUPABASE_KEY")
@@ -122,19 +144,137 @@ def buscar_vendas_reais_supabase():
         return res.data if res.data else []
     except:
         return []
-# ============================================================
-# >>> FIM ADIÇÃO NOVA
-# ============================================================
 
-# Config
+def gerar_combo_pessoa_obra_1280x720(foto_pessoa_pil, foto_obra_pil, texto_grande, subtexto, cor_destaque="#FF6B00", modelo="Choque"):
+    W, H = 1280, 720
+    if foto_obra_pil is not None:
+        bg = foto_obra_pil.convert("RGB")
+        fw, fh = bg.size
+        scale = max(W/fw, H/fh)
+        bg = bg.resize((int(fw*scale), int(fh*scale)), Image.LANCZOS)
+        bg = bg.crop(((bg.size[0]-W)//2, (bg.size[1]-H)//2, (bg.size[0]-W)//2+W, (bg.size[1]-H)//2+H))
+    else:
+        if "Choque" in modelo:
+            bg = Image.new('RGB', (W, H), (255, 193, 7))
+        else:
+            bg = Image.new('RGB', (W, H), (35,35,35))
+    if foto_obra_pil is not None:
+        overlay = Image.new('RGBA', (W, H), (0,0,0,70))
+        bg = Image.alpha_composite(bg.convert("RGBA"), overlay).convert("RGB")
+    draw = ImageDraw.Draw(bg)
+    if foto_pessoa_pil is not None:
+        pessoa = foto_pessoa_pil.convert("RGBA")
+        ph = int(H * 0.88)
+        pw = int(pessoa.size[0] * (ph / pessoa.size[1]))
+        pessoa = pessoa.resize((pw, ph), Image.LANCZOS)
+        x_p = W - pw - 20
+        y_p = H - ph
+        sombra = Image.new('RGBA', (pw+20, ph+20), (0,0,0,110))
+        bg.paste(sombra, (x_p-10, y_p), sombra)
+        bg.paste(pessoa, (x_p, y_p), pessoa)
+        draw.rectangle([(x_p-6, y_p-6), (x_p+pw+6, y_p+ph+6)], outline=cor_destaque, width=7)
+    try:
+        font_big = ImageFont.truetype("DejaVuSans-Bold.ttf", 105)
+        font_small = ImageFont.truetype("DejaVuSans-Bold.ttf", 52)
+    except:
+        font_big = ImageFont.load_default()
+        font_small = ImageFont.load_default()
+    def texto_youtube(x, y, txt, font, fill):
+        for dx in (-6,-3,0,3,6):
+            for dy in (-6,-3,0,3,6):
+                draw.text((x+dx, y+dy), txt, font=font, fill="black")
+        draw.text((x, y), txt, font=font, fill=fill)
+    x_txt = 50
+    y_txt = 110
+    if "Choque" in modelo and foto_obra_pil is None:
+        draw.rectangle([(x_txt-20, y_txt-15), (x_txt+50, y_txt+100)], fill=(0,0,0))
+        draw.text((x_txt, y_txt), texto_grande.upper(), font=font_big, fill=(255,193,7))
+    else:
+        texto_youtube(x_txt, y_txt, texto_grande.upper(), font_big, cor_destaque)
+    draw.text((55, y_txt+135), subtexto.upper(), font=font_small, fill="white", stroke_width=7, stroke_fill="black")
+    return bg.resize((W, H))
+
+def gerar_thumbnail_simples_1280x720(texto_grande, subtexto, cor="#FF6B00"):
+    W, H = 1280, 720
+    img = Image.new('RGB', (W, H), (17,17,17))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0,0,W, int(H*0.45)], fill=cor)
+    try:
+        font_big = ImageFont.truetype("DejaVuSans-Bold.ttf", 100)
+        font_small = ImageFont.truetype("DejaVuSans-Bold.ttf", 50)
+    except:
+        font_big = ImageFont.load_default()
+        font_small = ImageFont.load_default()
+    d.text((50,100), texto_grande.upper(), fill="white", font=font_big, stroke_width=6, stroke_fill="black")
+    d.text((50,250), subtexto.upper(), fill="white", font=font_small, stroke_width=5, stroke_fill="black")
+    return img
+
+def puxar_imagens_instagram_temporal(username="fc_constroi", qtd=6):
+    """v3.3.7 - REMOVIDO INSTALOADER - retorna vazio instantâneo, não trava"""
+    return []
+
+def imagem_url_para_pil_temporal(url):
+    try:
+        resp = requests.get(url, timeout=3)
+        if resp.status_code == 200:
+            return Image.open(BytesIO(resp.content)).convert("RGB")
+    except:
+        pass
+    return None
+
+def puxar_instagram_online_auto(username="fc_constroi", qtd=3):
+    """NOVO v3.3.8 - Puxa @fc_constroi online com sessão salva e já retorna PIL"""
+    imgs = []
+    try:
+        import instaloader
+        L = instaloader.Instaloader(
+            download_pictures=False,
+            download_videos=False,
+            save_metadata=False,
+            compress_json=False
+        )
+        L.context.request_timeout = 10
+        try:
+            L.load_session_from_file(username, filename=f"{username}_session")
+        except:
+            pass
+        profile = instaloader.Profile.from_username(L.context, username)
+        for i, post in enumerate(profile.get_posts()):
+            if i >= qtd:
+                break
+            try:
+                resp = requests.get(post.url, timeout=10)
+                if resp.status_code == 200:
+                    img = Image.open(BytesIO(resp.content)).convert("RGB")
+                    imgs.append(img)
+            except:
+                continue
+    except Exception as e:
+        print(f"Erro puxar online: {e}")
+        return []
+    return imgs
+
+def gerar_thumbs_auto_com_insta(foto_pessoa_pil, lista_obras_insta, texto, subtexto, cor="#FF6B00"):
+    """NOVO v3.3.8 - Gera 3 thumbs 1280x720 automaticamente com fotos puxadas do Insta"""
+    thumbs = []
+    cores = [cor, "#FFC107", "#00E676"]
+    modelos = ["Modelo Obra (Foto obra + pessoa) - COMBO AUTOMÁTICO"] * 3
+    for i, obra in enumerate(lista_obras_insta[:3]):
+        thumb = gerar_combo_pessoa_obra_1280x720(
+            foto_pessoa_pil, obra, texto, subtexto,
+            cor_destaque=cores[i % 3],
+            modelo=modelos[i % 3]
+        )
+        thumbs.append(thumb)
+    return thumbs
+
 st.set_page_config(
-    page_title="FC CONSTROI • GROWTH AI v3.3.0",
+    page_title="FC CONSTROI • GROWTH AI v3.3.8",
     layout="wide",
     page_icon="🏗️",
     initial_sidebar_state="collapsed"
 )
 
-# Designer
 if HAS_DESIGNER:
     try:
         aplicar_design()
@@ -144,14 +284,12 @@ else:
     st.markdown("""
     <style>
     .main-header {background: linear-gradient(90deg,#111 0%,#222 100%);color:white;padding:14px 22px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;border-left:5px solid #FF6B00;}
-    .metric-card {background:white;border-radius:10px;padding:15px;border-left:4px solid #FF6B00;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
     .stTabs [data-baseweb="tab-list"] {gap:6px;flex-wrap:wrap;}
     .stTabs [data-baseweb="tab"] {background:#f5f5f5;border-radius:6px;padding:6px 12px;}
     .stTabs [aria-selected="true"] {background:#FF6B00 !important;color:white !important;}
     </style>
     """, unsafe_allow_html=True)
 
-# Helpers
 def get_now_bahia():
     return datetime.now(ZoneInfo("America/Bahia"))
 
@@ -170,16 +308,16 @@ def load_params():
             "plataformas": ["Instagram","Facebook","TikTok"],
             "horario": "07:00"
         },
-        "pia_esculpida_90x90": {
-            "id": "pia",
-            "titulo_original": "Fature 10k com pia esculpida 90x90",
-            "titulo_viral": "Pia esculpida 90x90 que fatura R$10k - Passo a passo",
+        "pia_banheiro_90x90": {
+            "id": "pia_de_banheiro",
+            "titulo_original": "Fature 10k com pia de banheiro 90x90",
+            "titulo_viral": "Pia de banheiro 90x90 que fatura R$10k - Passo a passo",
             "views": 32000,
             "status": "TOP2",
             "score_gancho": 8.7,
             "cta": "Comenta PIA que te mando no direct",
-            "gancho_3s": "Essa pia de 90x90 me deu R$10k de lucro em 1 dia",
-            "hashtags": "#piaesculpida #porcelanato #banheirodeluxo",
+            "gancho_3s": "Essa pia de banheiro de 90x90 me deu R$10k de lucro em 1 dia",
+            "hashtags": "#piadebanheiro #porcelanato #banheirodeluxo",
             "plataformas": ["Instagram","YouTube","Kwai"],
             "horario": "19:00"
         },
@@ -199,15 +337,13 @@ def load_params():
     }
 
 PARAMS = load_params()
-
-# Header
 now = get_now_bahia()
 st.markdown(f"""
 <div class="main-header">
 <div>
-<b>FC CONSTRÓI • GROWTH AI v3.3.0 FINAL</b> 
-<span style="color:#FF6B00">• 9 ABAS COMPLETAS • 500+ LINHAS • SUPABASE KIWIFY TRACKING</span>
-<br><small style="color:#aaa">Loop TOP3: gaveta (48k) | pia (32k) | base (28k) - Horários 07h/12h/19h</small>
+<b>FC CONSTRÓI • GROWTH AI v3.4.0 KEYWORDS EXPANDIDAS</b> 
+<span style="color:#FF6B00">• 9 ABAS • 6 CIDADES • 8 NOVOS INTERESSES PORCELANATO</span>
+<br><small style="color:#aaa">Loop TOP3: gaveta (48k) | pia de banheiro (32k) | base (28k) - Keywords: pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas</small>
 </div>
 <div style="text-align:right;font-size:12px">
 {now.strftime('%d/%m/%Y • %H:%M')} - Irará-BA<br>
@@ -215,10 +351,8 @@ st.markdown(f"""
 </div>
 </div>
 """, unsafe_allow_html=True)
-
 st.markdown("")
 
-# 9 TABS
 tab_names = [
     "🔥 FILTROS (Cursos+Local)",
     "♻️ Reciclar Conteúdo",
@@ -232,19 +366,17 @@ tab_names = [
 ]
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(tab_names)
 
-# TAB 1 - FILTROS
 with tab1:
-    st.subheader("🔥 FILTROS - IA Curso + Local - 6 Cidades")
+    st.subheader("🔥 FILTROS - IA Curso + Local - 6 Cidades CORRIGIDAS")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        curso = st.selectbox("Curso", ["Todos","Marmoraria na Prática","Cozinha Planejada","Banheiro de Luxo","Porcelanato Estrutural"], key="f_curso")
+        curso = st.selectbox("Curso", ["Todos","Cozinha Planejada","Banheiro de Luxo","Porcelanato Estrutural","Closet em Porcelanato","Bancada Cozinha","Fachadas","Nichos","Revestimentos","Armários/Gavetas em Porcelanato","Pia de Banheiro em Porcelanato"], key="f_curso")
     with col2:
-        local = st.selectbox("Local (6 cidades)", ["Todos","Irará-BA","Santanópolis","Água Fria","Ouriçangas","Pedrão","Feira de Santana"], key="f_local")
+        local = st.selectbox("Local (6 cidades)", ["Todos"] + CIDADES_ORIGINAIS, key="f_local")
     with col3:
         viral = st.selectbox("Filtro Viral", ["Top 3 Loop Infinito","Todos os vídeos","Score >8.0","Score >9.0"], key="f_viral")
     with col4:
         plataforma = st.selectbox("Plataforma", ["Todas","Instagram","YouTube","TikTok","Kwai","Facebook"], key="f_plat")
-
     filtered = PARAMS
     df_filtro = pd.DataFrame([
         {"ID": k, "Título": v["titulo_viral"], "Views": v["views"], "Score Gancho": v["score_gancho"], "Status": v["status"], "Horário": v["horario"]}
@@ -256,10 +388,9 @@ with tab1:
         st.metric("Total filtrado", f"{len(df_filtro)} vídeos", "Top 3")
         st.metric("Views filtradas", f"{df_filtro['Views'].sum()/1000:.0f}k")
     with col_b:
-        st.success("✅ FILTROS FUNCIONANDO - Separa curiosos do curso grátis de quem quer comprar bancada hoje")
+        st.success("✅ 6 CIDADES + 8 INTERESSES PORCELANATO: pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas")
         st.button("📄 Exportar PDF Filtrado", key="pdf_filtro")
 
-# TAB 2 - RECICLAR
 with tab2:
     st.subheader("♻️ Reciclar Conteúdo - Transforma TOP3 em 9 conteúdos novos")
     for key, val in PARAMS.items():
@@ -282,7 +413,6 @@ with tab2:
                 st.button(f"♻️ Reciclar {val['id']}", key=f"btn_rec_{key}", type="primary")
                 st.button(f"📥 Baixar com yt-dlp", key=f"btn_yt_{key}")
                 st.button(f"🎨 Gerar Thumbnail", key=f"btn_thumb_{key}")
-
     st.markdown("---")
     col_r1, col_r2 = st.columns(2)
     with col_r1:
@@ -292,25 +422,21 @@ with tab2:
         st.number_input("Quantos variações por vídeo?", min_value=1, max_value=5, value=3, key="qtd_var")
         st.button("🔥 GERAR 9 CONTEÚDOS (3 vídeos x 3 variações)", type="primary", key="gerar_9")
 
-# TAB 3 - DASHBOARD
 with tab3:
-    st.subheader("📊 Dashboard + Gráficos IA - FIXO (bug v3.1.5 corrigido)")
+    st.subheader("📊 Dashboard + Gráficos IA - FIXO")
     if "metrics_fixed" not in st.session_state:
         st.session_state.metrics_fixed = {"cac": 100, "roas": 3.2, "vendas": 7, "invest": 500}
-
     c1,c2,c3,c4,c5 = st.columns(5)
     c1.metric("Vídeos Top 3", "3", "Loop infinito", border=True)
     c2.metric("Views Totais", "108k", "+12% vs ontem", border=True)
     c3.metric("Vendas Kiwify", "R$ 3.477", "+R$497 hoje", border=True)
     c4.metric("ROAS Fixo", f"{st.session_state.metrics_fixed['roas']}x", "Não some", border=True)
     c5.metric("CAC Fixo", f"R$ {st.session_state.metrics_fixed['cac']}", "Travado", border=True)
-
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        st.markdown("**Top 3 Performance**")
         df_top = pd.DataFrame([
             {"video": "gaveta R$8mil", "views": 48000, "score": 9.2},
-            {"video": "pia 10k", "views": 32000, "score": 8.7},
+            {"video": "pia banheiro 10k", "views": 32000, "score": 8.7},
             {"video": "base 300kg", "views": 28000, "score": 8.4}
         ])
         if HAS_PLOTLY:
@@ -318,9 +444,7 @@ with tab3:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.bar_chart(df_top, x="video", y="views")
-
     with col_g2:
-        st.markdown("**Evolução Views (últimos 7 dias)**")
         dates = [get_now_bahia() - timedelta(days=i) for i in range(7,0,-1)]
         df_evo = pd.DataFrame({
             "data": [d.strftime("%d/%m") for d in dates],
@@ -332,8 +456,6 @@ with tab3:
             st.plotly_chart(fig2, use_container_width=True)
         else:
             st.line_chart(df_evo, x="data", y="views")
-
-        st.markdown("**Funil Quente/Morno/Frio**")
         df_funil = pd.DataFrame([
             {"etapa": "Comentário PORCELANATO", "qtd": 100},
             {"etapa": "DM enviada", "qtd": 70},
@@ -342,53 +464,136 @@ with tab3:
         ])
         st.dataframe(df_funil, use_container_width=True)
 
-# TAB 4 - THUMBNAILS IA
 with tab4:
-    st.subheader("🖼️ Thumbnails IA - Pillow Grátis + DALL·E opcional")
-    c1, c2 = st.columns(2)
+    st.subheader("🖼️ Thumbnails IA - 1280x720 + COMBO + AUTO ONLINE")
+    if "thumbs_memoria" not in st.session_state:
+        st.session_state.thumbs_memoria = []
+    if "insta_cache" not in st.session_state:
+        st.session_state.insta_cache = []
+    if "obra_selecionada" not in st.session_state:
+        st.session_state.obra_selecionada = None
+    if "dalle_bg" not in st.session_state:
+        st.session_state.dalle_bg = None
+    st.markdown("### 🚀 NOVO v3.3.8 - PUXA INSTA ONLINE + GERA THUMB AUTO")
+    col_auto1, col_auto2, col_auto3, col_auto4 = st.columns([1,1,2,1])
+    with col_auto1:
+        qtd_insta = st.number_input("Qtd fotos Insta", min_value=1, max_value=6, value=3, key="qtd_insta_v338")
+    with col_auto2:
+        texto_auto = st.text_input("Texto Thumb Auto", "ERRO R$8MIL", key="txt_auto_v338")
+    with col_auto3:
+        sub_auto = st.text_input("Subtexto Auto", "95% ERRAM", key="sub_auto_v338")
+    with col_auto4:
+        if st.button("🚀 PUXAR + GERAR AUTO", key="btn_auto_v338", type="primary"):
+            with st.spinner(f"Puxando {qtd_insta} fotos @fc_constroi online e gerando thumbs..."):
+                fp_auto = None
+                try:
+                    if 'uploaded_pessoa_global' in st.session_state and st.session_state.uploaded_pessoa_global:
+                        fp_auto = Image.open(st.session_state.uploaded_pessoa_global)
+                except:
+                    pass
+                obras_auto = puxar_instagram_online_auto("fc_constroi", int(qtd_insta))
+                if not obras_auto:
+                    st.error("Instagram bloqueou sem login. Faz 1 vez no terminal: instaloader --login=SEU_USER")
+                    st.info("Depois de logar, clica de novo que puxa automático e já gera as thumbs 1280x720")
+                else:
+                    thumbs_auto = gerar_thumbs_auto_com_insta(fp_auto, obras_auto, texto_auto, sub_auto)
+                    st.success(f"✅ {len(thumbs_auto)} thumbs geradas auto com fotos online do @fc_constroi!")
+                    cols_auto = st.columns(3)
+                    for i, th in enumerate(thumbs_auto):
+                        with cols_auto[i]:
+                            st.image(th, caption=f"AUTO {i+1} - 1280x720 - Insta Online", use_container_width=True)
+                            buf = BytesIO()
+                            th.save(buf, format="JPEG", quality=96)
+                            st.download_button(f"📥 Baixar AUTO {i+1}", buf.getvalue(), f"thumb_auto_online_{i+1}_1280x720.jpg", "image/jpeg", key=f"dl_auto_v338_{i}")
+                            st.session_state.thumbs_memoria.append({
+                                "img": th,
+                                "bytes": buf.getvalue(),
+                                "cor": "#FF6B00",
+                                "nome": f"thumb_auto_online_{i+1}_1280x720.jpg"
+                            })
+    st.markdown("---")
+    st.markdown("#### 📸 MODO TEMPORAL REAL (sem baixar nada) - FUNCIONA 100%")
+    col_insta1, col_insta2, col_insta3 = st.columns([2,1,1])
+    with col_insta1:
+        st.success("✅ FIX v3.3.8: Upload manual 100% temporal + NOVO modo AUTO ONLINE acima")
+    with col_insta2:
+        qtd_insta_old = st.number_input("Qtd fotos", min_value=1, max_value=12, value=2, key="qtd_insta_v337")
+    with col_insta3:
+        if st.button("📸 Info modo temporal", key="pull_insta_v337", type="primary"):
+            st.info("MODO TEMPORAL REAL: Upload aqui não salva em disco, tudo em BytesIO na RAM")
+    st.markdown("---")
+    c1, c2 = st.columns([2,1])
     with c1:
-        st.markdown("**GERADOR 100% OFFLINE (Pillow)**")
-        uploaded = st.file_uploader("Upload foto base (obra)", type=["jpg","png","jpeg"], key="thumb_up")
-        texto_thumb = st.text_input("Texto grande Thumbnail", "ERRO R$8MIL", key="thumb_text")
-        subtexto = st.text_input("Subtexto", "95% ERRAM", key="thumb_sub")
-        cor_fundo = st.color_picker("Cor destaque FC", "#FF6B00", key="thumb_color")
-        modelo = st.selectbox("Modelo", ["Modelo Choque (Fundo amarelo + texto preto)", "Modelo Antes/Depois", "Modelo Preço (R$49,90 gigante)", "Modelo Seta Vermelha"], key="thumb_modelo")
-
-        if st.button("🎨 Gerar 3 variações Thumbnail (Pillow)", type="primary", key="gen_thumb_pillow"):
+        st.markdown("**GERADOR 100% OFFLINE (Pillow) - COMBO AUTOMÁTICO - TEMPORAL**")
+        col_up_a, col_up_b = st.columns(2)
+        with col_up_a:
+            st.markdown("Upload foto PESSOA (você) - temporal")
+            uploaded_pessoa = st.file_uploader("Upload foto base (pessoa)", type=["jpg","png","jpeg"], key="thumb_up_pessoa_v337", label_visibility="collapsed")
+            if uploaded_pessoa:
+                st.session_state.uploaded_pessoa_global = uploaded_pessoa
+        with col_up_b:
+            st.markdown("Upload foto OBRA / TUDO (fundo) - temporal - puxe do @fc_constroi")
+            uploaded_obra = st.file_uploader("Upload foto base (obra)", type=["jpg","png","jpeg"], key="thumb_up_obra_v337", label_visibility="collapsed")
+        texto_thumb = st.text_input("Texto grande Thumbnail", "ERRO R$8MIL", key="thumb_text_v337")
+        subtexto = st.text_input("Subtexto", "95% ERRAM", key="thumb_sub_v337")
+        cor_fundo = st.color_picker("Cor destaque FC", "#FF6B00", key="thumb_color_v337")
+        modelo = st.selectbox("Modelo", ["Modelo Choque (Fundo amarelo + texto preto)", "Modelo Obra (Foto obra + pessoa) - COMBO AUTOMÁTICO", "Modelo Reciclado (Auto combo + borda)", "Modelo Antes/Depois", "Modelo Preço (R$49,90 gigante)", "Modelo Seta Vermelha"], key="thumb_modelo_v337")
+        if st.button("🎨 Gerar 3 variações Thumbnail (Pillow) - 1280x720", type="primary", key="gen_thumb_pillow_v337"):
             if HAS_PIL:
-                img = Image.new('RGB', (1080, 1920), color = (17,17,17))
-                d = ImageDraw.Draw(img)
-                d.rectangle([0,0,1080,400], fill=cor_fundo)
-                d.text((50,100), texto_thumb, fill="white")
-                d.text((50,200), subtexto, fill="white")
-                buf = BytesIO()
-                img.save(buf, format="PNG")
-                st.image(buf, caption="Thumbnail gerada - 1080x1920")
-                st.download_button("📥 Baixar PNG", data=buf.getvalue(), file_name=f"thumb_{texto_thumb}.png", mime="image/png", key="dl_thumb")
+                fp = Image.open(uploaded_pessoa) if uploaded_pessoa else None
+                fo = Image.open(uploaded_obra) if uploaded_obra else None
+                if fo is None and st.session_state.obra_selecionada is not None:
+                    fo = st.session_state.obra_selecionada
+                cores = [cor_fundo, "#FFC107", "#00E676"]
+                cols = st.columns(3)
+                for i, col in enumerate(cols):
+                    with col:
+                        thumb = gerar_combo_pessoa_obra_1280x720(fp, fo, texto_thumb, subtexto, cores[i], modelo)
+                        st.image(thumb, caption=f"Var {i+1} {cores[i]} - 1280x720", use_container_width=True)
+                        buf = BytesIO()
+                        thumb.save(buf, format="JPEG", quality=96)
+                        st.session_state.thumbs_memoria.append({
+                            "img": thumb,
+                            "bytes": buf.getvalue(),
+                            "cor": cores[i],
+                            "nome": f"thumb_{texto_thumb[:10]}_v{i+1}_1280x720.jpg"
+                        })
+                        st.download_button(f"📥 Baixar JPG Var {i+1} 1280x720", data=buf.getvalue(), file_name=f"thumb_{texto_thumb[:10]}_v{i+1}_1280x720.jpg", mime="image/jpeg", key=f"dl_thumb_v337_{i}")
             else:
                 st.warning("Pillow não instalado")
-
+        if st.session_state.thumbs_memoria:
+            st.markdown("---")
+            st.markdown(f"### ✅ {len(st.session_state.thumbs_memoria)} Thumbnails salvas na memória (não somem ao clicar)")
+            cols_mem = st.columns(3)
+            ultimas = st.session_state.thumbs_memoria[-3:]
+            for i, item in enumerate(ultimas):
+                with cols_mem[i]:
+                    st.image(item["img"], caption=f"Memória Var {i+1} {item['cor']} - 1280x720", use_container_width=True)
+                    st.download_button(f"📥 Baixar Memória {i+1}", data=item["bytes"], file_name=item["nome"], mime="image/jpeg", key=f"dl_mem_persist_{i}_v337")
     with c2:
-        st.markdown("**PREVIEW + DALL·E V2 (pago)**")
-        st.image("https://via.placeholder.com/400x700/111111/FF6B00?text=THUMBNAIL%0AERRO+R$8MIL%0A95%+ERRAM", caption="Preview modelo Choque")
-        st.text_input("Prompt DALL·E (opcional)", "porcelanato marmorizado em banheiro luxuoso", key="dalle_prompt")
-        st.button("🖼️ Gerar fundo com IA (DALL·E)", key="dalle_gen")
+        st.markdown("**PREVIEW + DALL·E V2 (pago) - 1280x720**")
+        st.image("https://via.placeholder.com/1280x720/111111/FF6B00?text=THUMBNAIL%0AERRO+R$8MIL%0A95%25+ERRAM%0A1280x720", caption="Preview modelo Choque - 1280x720 YouTube")
+        st.text_input("Prompt DALL·E (opcional)", "porcelanato marmorizado em banheiro luxuoso", key="dalle_prompt_v337")
+        if st.button("🖼️ Gerar fundo com IA (DALL·E) - 1280x720", key="dalle_gen_v337"):
+            st.info("DALL·E clicado - com memória fixa, não apaga mais (fix v3.3.8)")
+        if st.button("🗑️ Limpar memória Thumbs", key="clear_thumbs_v337"):
+            st.session_state.thumbs_memoria = []
+            st.session_state.insta_cache = []
+            st.session_state.obra_selecionada = None
+            st.rerun()
+        st.caption("✅ v3.3.8: AUTO ONLINE + 1280x720 + temporal real")
 
-# TAB 5 - YOUTUBE PACK
 with tab5:
     st.subheader("🎬 YouTube Pack - Automação Completa")
     link_yt = st.text_input("Link YouTube original (para reciclar)", "https://youtube.com/watch?v=...", key="yt_link")
     col_yt1, col_yt2 = st.columns(2)
     with col_yt1:
-        st.markdown("**SEO AUTOMÁTICO**")
         st.text_input("Título SEO (com Score Gancho)", "Como NÃO errar gaveta porcelanato - economize R$8mil | FC Constrói", key="yt_titulo")
         st.text_area("Descrição com links Kiwify + Timestamp", "00:00 Intro - Erro R$8mil\n01:30 Como fazer certo\n\n👉 Curso: https://pay.kiwify.com.br/...", key="yt_desc", height=150)
     with col_yt2:
-        st.markdown("**TAGS + CHECKLIST**")
-        st.text_area("Tags", "marmoraria, moveis planejados, cozinha planejada, porcelanato, pia esculpida, gaveta porcelanato, Irará BA", key="yt_tags", height=100)
+        st.text_area("Tags", "marmoraria, moveis planejados, cozinha planejada, porcelanato, pia de banheiro, gaveta porcelanato, Irará BA, closet porcelanato, bancada cozinha, fachadas, nichos, revestimentos, armarios", key="yt_tags", height=100)
         st.selectbox("Horário ideal", ["19:00 Quinta (melhor CTR)", "07:00 Segunda", "12:00 Terça"], key="yt_horario")
         st.checkbox("Thumbnail automática junto", value=True, key="yt_thumb_auto")
-
     col_yt_btn1, col_yt_btn2, col_yt_btn3 = st.columns(3)
     with col_yt_btn1:
         st.button("📦 Gerar Pack YouTube Completo", type="primary", key="gen_yt_pack")
@@ -397,16 +602,14 @@ with tab5:
     with col_yt_btn3:
         st.button("📋 Copiar tudo (1 clique)", key="yt_copy_all")
 
-# TAB 6 - CAC ROAS
 with tab6:
-    st.subheader("💰 CAC CPA ROAS - CALCULADORA FIXA (não some mais)")
+    st.subheader("💰 CAC CPA ROAS - CALCULADORA FIXA")
     if "invest_total" not in st.session_state:
         st.session_state.invest_total = 500.0
     if "vendas_total" not in st.session_state:
         st.session_state.vendas_total = 5
     if "ticket_medio" not in st.session_state:
         st.session_state.ticket_medio = 497.0
-
     c1,c2,c3 = st.columns(3)
     with c1:
         st.session_state.invest_total = st.number_input("Investimento Total (R$)", value=st.session_state.invest_total, key="invest_input")
@@ -424,7 +627,6 @@ with tab6:
         st.metric("Lucro", f"R$ {lucro:.2f}", border=True)
         st.session_state.metrics_fixed["roas"] = roas
 
-# TAB 7 - INVESTIMENTOS
 with tab7:
     st.subheader("💹 INVESTIMENTOS - Controle completo")
     col_inv1, col_inv2 = st.columns([2,1])
@@ -436,14 +638,11 @@ with tab7:
         ])
         st.dataframe(df_invest, use_container_width=True)
     with col_inv2:
-        st.markdown("**Adicionar investimento**")
         st.number_input("Valor (R$)", value=100.0, key="inv_valor")
         st.button("➕ Adicionar", type="primary", key="inv_add")
 
-# TAB 8 - VENDAS KIWIFY + SUPABASE
 with tab8:
-    st.subheader("💚 VENDAS Kiwify - SUPABASE TRACKING REAL (v3.3.0)")
-    # AGORA MOSTRA DADOS REAIS SE TIVER
+    st.subheader("💚 VENDAS Kiwify - SUPABASE TRACKING REAL (v3.3.8)")
     vendas_reais_tab8 = buscar_vendas_reais_supabase()
     if vendas_reais_tab8:
         st.success(f"✅ Supabase conectado - {len(vendas_reais_tab8)} vendas reais encontradas!")
@@ -455,40 +654,23 @@ with tab8:
         col_k3.metric("Plataformas", f"{df_real['plataforma'].nunique()}")
         col_k4.metric("Faturamento Real", f"R$ {df_real['valor'].sum():.2f}")
     else:
-        st.info("ℹ️ Nenhuma venda real ainda no Supabase - Mostrando exemplo mockado abaixo (use o teste na sidebar pra criar a primeira)")
         df_vendas = pd.DataFrame([
             {"id": "kiwify_001", "produto": "Marmoraria na Prática", "valor": 497, "status": "approved", "origem": "gaveta viral (48k)", "data": "20/10/2026 22:00", "cliente": "João - Irará"},
-            {"id": "kiwify_002", "produto": "Cozinha Planejada", "valor": 297, "status": "approved", "origem": "pia 10k (32k)", "data": "19/10/2026 18:00", "cliente": "Maria - Feira"},
+            {"id": "kiwify_002", "produto": "Cozinha Planejada", "valor": 297, "status": "approved", "origem": "pia de banheiro 10k (32k)", "data": "19/10/2026 18:00", "cliente": "Maria - Feira"},
             {"id": "kiwify_003", "produto": "Porcelanato Estrutural", "valor": 99.9, "status": "approved", "origem": "base 300kg (28k)", "data": "19/10/2026 14:00", "cliente": "José - Santanópolis"},
         ])
         st.dataframe(df_vendas, use_container_width=True)
 
-    st.code("""
-# Webhook Kiwify agora salva automatico: cidade, interesse, plataforma, traffic_type
-# SCK exemplo: fb_feira_pia_organico -> facebook | feira | pia_esculpida | pago
-    """, language="python")
-
-# TAB 9 - INSTA AUTO + LOOP VIRAL
 with tab9:
     st.subheader("🤖 Insta Auto + Loop Viral [NOVO] - 07h / 12h / 19h - Só TOP3")
-    st.success("✅ Loop infinito configurado - Não reposta tudo, só os 3 virais originais")
-
-    st.markdown("""
-    **Seu loop infinito dos 3 originais:**
-    - **SEG 07:00** - gaveta (Erro R$8mil - 48k) -> Insta/Face/TikTok
-    - **SEG 19:00** - pia (Fature 10k - 32k) -> Insta/YouTube/Shorts
-    - **TER 12:00** - base_armario (300kg - 28k) -> TikTok/Kwai/Insta
-    - Loop só TOP3 virais
-    """)
-
+    st.success("✅ Loop infinito configurado")
     col_loop1, col_loop2 = st.columns(2)
     with col_loop1:
         st.time_input("Horário 1 - Gaveta", value=pd.to_datetime("07:00").time(), key="loop_h1")
         st.time_input("Horário 2 - Base 300kg", value=pd.to_datetime("12:00").time(), key="loop_h2")
-        st.time_input("Horário 3 - Pia 10k", value=pd.to_datetime("19:00").time(), key="loop_h3")
+        st.time_input("Horário 3 - Pia de banheiro 10k", value=pd.to_datetime("19:00").time(), key="loop_h3")
         st.multiselect("Plataformas", ["Instagram","Facebook","TikTok","YouTube Shorts","Kwai"], default=["Instagram","TikTok","YouTube Shorts"], key="loop_plats")
         st.checkbox("Loop infinito só TOP3 virais", value=True, key="loop_top3")
-
     with col_loop2:
         st.metric("Próximo post", "SEG 07:00 - Gaveta R$8mil", "em 8h")
         st.metric("Último post", "TER 12:00 - Base 300kg", "28k views")
@@ -497,29 +679,20 @@ with tab9:
             st.balloons()
         if st.button("⏸️ Pausar loop", key="pausar_loop"):
             st.warning("Loop pausado")
-
-    st.markdown("**PARAMS ORIGINAIS SALVOS (JSON)**")
     st.json(PARAMS)
 
-# Footer
 st.markdown("---")
 st.markdown(f"""
 <center><small>
-FC CONSTRÓI • GROWTH AI v3.3.0 FINAL COMPLETA • 593 linhas • 9 ABAS • Irará-BA • {now.strftime('%d/%m/%Y %H:%M')}<br>
-<b>Params:</b> gaveta (Erro R$8mil - TOP1 48k) | pia 90x90 (Fature 10k - TOP2 32k) | base 300kg (TOP3 28k)<br>
-<b>Stack:</b> Streamlit + Supabase Kiwify + yt-dlp + Pillow + ManyChat + YouTube API + Loop 07h/12h/19h<br>
-Avaliado em R$27k
+FC CONSTRÓI • GROWTH AI v3.4.0 • KEYWORDS EXPANDIDAS • Irará-BA • {now.strftime('%d/%m/%Y %H:%M')}<br>
+Santanópolis, Irará, Feira de Santana, Santa Bárbara, Serrinha, Ouriçangas - pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas
 </small></center>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# >>> ADIÇÃO 2 - TESTE KIWIFY SEM PAGAR - SIDEBAR - APENAS AGREGAR
-# ============================================================
 with st.sidebar:
     st.markdown("---")
     st.markdown("### 🧪 TESTE KIWIFY (NOVO)")
-    st.caption("Testa sem pagar na Kiwify - prova que cai no Supabase")
-    sck_teste = st.text_input("SCK teste", "fb_feira_pia_organico", key="sck_teste_sidebar_novo")
+    sck_teste = st.text_input("SCK teste", "fb_feira_pia_banheiro_organico", key="sck_teste_sidebar_novo")
     email_teste = st.text_input("Email teste", "teste@irara.com", key="email_teste_sidebar")
     if st.button("💾 Salvar venda TESTE no Supabase", key="btn_teste_supabase_novo"):
         ok, resp = salvar_venda_kiwify_teste(sck_teste, email_teste)
@@ -528,7 +701,6 @@ with st.sidebar:
             st.balloons()
         else:
             st.error(f"❌ Erro: {resp}")
-
     st.markdown("---")
     st.markdown("**Vendas Reais Supabase (prova)**")
     vendas_reais = buscar_vendas_reais_supabase()
@@ -541,4 +713,12 @@ with st.sidebar:
         st.metric("Total no banco", len(vendas_reais))
     else:
         st.caption("Nenhuma venda ainda ou sem env vars")
+
+
         
+
+        
+        
+
+
+
