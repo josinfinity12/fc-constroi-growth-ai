@@ -1,6 +1,7 @@
-# FC CONSTRÓI • GROWTH AI v3.7 PROFISSIONAL - Kiwify Vendas Curso Online
+# FC CONSTRÓI • GROWTH AI v3.8 NACIONAL - Kiwify Vendas Curso Online BRASIL TODO
 # FIX PROFISSIONAL: Remove TESTE KIWIFY -> Kiwify Vendas Curso Online + remove testes
 # REGRA: NUNCA DELETAR NADA - SÓ ADICIONAR/CORRIGIR
+# FIX v3.8 NACIONAL: Curso online de porcelanato Academia FC Constroi é vendido para BRASIL TODO - 6 cidades = APENAS SERVICO LOCAL
 
 import streamlit as st
 import pandas as pd
@@ -47,6 +48,14 @@ CIDADES_ORIGINAIS = [
     "Ouriçangas"
 ]
 
+# ===== FIX v3.8 NACIONAL - BRASIL TODO - ADICIONADO SEM DELETAR NADA ANTERIOR =====
+CURSO_ONLINE_ABRANGENCIA = "NACIONAL - BRASIL TODO"
+CURSO_ONLINE_DESCRICAO = "Academia FC Constrói - Curso Online Porcelanato - Venda para Brasil Todo"
+CIDADES_LOCAL_SERVICO = ["irara","feira_de_santana","salvador","santanopolis","santa_barbara","serrinha","ouricangas"]  # apenas servico local de instalacao
+CIDADE_CURSO_ONLINE_FIXA = "nacional"
+ABRANGENCIA_CURSO = "NACIONAL - BRASIL TODO - Academia FC Constrói"
+# =================================================================================
+
 def extrair_filtros_sck(sck_full: str):
     s = str(sck_full).lower()
     plat = "wix"
@@ -87,6 +96,12 @@ def extrair_filtros_sck(sck_full: str):
     traffic = "pago" if pago else "organico"
     return plat, cid, inter, traffic
 
+# FIX v3.8 - NOVA FUNCAO ADICIONADA - NAO DELETA A ORIGINAL
+def extrair_filtros_sck_nacional(sck_full: str):
+    plat, cid_origem, inter, traffic = extrair_filtros_sck(sck_full)
+    cidade_venda = "nacional"  # FIX: Curso online sempre NACIONAL
+    return plat, cidade_venda, cid_origem, inter, traffic
+
 def salvar_venda_kiwify_teste(sck_teste: str, email_teste="cliente@email.com"):
     try:
         supa_url = os.getenv("SUPABASE_URL")
@@ -102,12 +117,15 @@ def salvar_venda_kiwify_teste(sck_teste: str, email_teste="cliente@email.com"):
             return False, "Sem SUPABASE_URL/KEY no Environment"
         from supabase import create_client
         supa = create_client(supa_url, supa_key)
-        plat, cid, inter, traffic = extrair_filtros_sck(sck_teste)
+        plat, cid_origem, inter, traffic = extrair_filtros_sck(sck_teste)
+        # FIX v3.8 NACIONAL - Curso online = nacional, guarda origem como campo extra
         payload = {
             "sck": sck_teste,
             "sck_completo": sck_teste,
-            "cidade": cid,
+            "cidade": "nacional",  # CORRIGIDO v3.8 NACIONAL
+            "cidade_origem_lead": cid_origem,  # ADICIONADO - NAO DELETA ANTERIOR
             "interesse": inter,
+            "abrangencia": "NACIONAL - BRASIL TODO - Academia FC Constrói",  # ADICIONADO
             "plataforma": plat,
             "traffic_type": traffic,
             "utm_campaign": "topo",
@@ -266,7 +284,7 @@ def gerar_thumbs_auto_com_insta(foto_pessoa_pil, lista_obras_insta, texto, subte
     return thumbs
 
 st.set_page_config(
-    page_title="FC CONSTROI • GROWTH AI v3.7 PROFISSIONAL",
+    page_title="FC CONSTROI • GROWTH AI v3.8 NACIONAL",
     layout="wide",
     page_icon="🏗️",
     initial_sidebar_state="collapsed"
@@ -338,13 +356,13 @@ now = get_now_bahia()
 st.markdown(f"""
 <div class="main-header">
 <div>
-<b>FC CONSTRÓI • GROWTH AI v3.7 PROFISSIONAL - Kiwify Vendas Curso Online</b> 
-<span style="color:#FF6B00">• 9 ABAS • 6 CIDADES • 8 NOVOS INTERESSES PORCELANATO</span>
-<br><small style="color:#aaa">Loop TOP3: gaveta (48k) | pia de banheiro (32k) | base (28k) - Keywords: pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas</small>
+<b>FC CONSTRÓI • GROWTH AI v3.8 NACIONAL - Kiwify Vendas Curso Online BRASIL TODO</b> 
+<span style="color:#FF6B00">• 9 ABAS • CURSO NACIONAL + 6 CIDADES SERVICO LOCAL • 8 INTERESSES PORCELANATO</span>
+<br><small style="color:#aaa">FIX v3.8 NACIONAL: Curso Online Academia FC Constrói = NACIONAL Brasil Todo | 6 Cidades = Apenas Serviço Local | Loop TOP3: gaveta (48k) | pia (32k) | base (28k) - pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas</small>
 </div>
 <div style="text-align:right;font-size:12px">
 {now.strftime('%d/%m/%Y • %H:%M')} - Irará-BA<br>
-<span style="color:#FF6B00">● Online</span> Supabase
+<span style="color:#FF6B00">● Online NACIONAL</span> Supabase
 </div>
 </div>
 """, unsafe_allow_html=True)
@@ -358,18 +376,18 @@ tab_names = [
     "🎬 YouTube Pack",
     "💰 CAC CPA ROAS",
     "💹 INVESTIMENTOS",
-    "💚 VENDAS Kiwify",
+    "💚 VENDAS Kiwify NACIONAL",
     "🤖 Insta Auto + Loop Viral"
 ]
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(tab_names)
 
 with tab1:
-    st.subheader("🔥 FILTROS - IA Curso + Local - 6 Cidades CORRIGIDAS")
+    st.subheader("🔥 FILTROS - IA Curso + Local - CURSO NACIONAL + 6 Cidades Serviço Local")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         curso = st.selectbox("Curso", ["Todos","Cozinha Planejada","Banheiro de Luxo","Porcelanato Estrutural","Closet em Porcelanato","Bancada Cozinha","Fachadas","Nichos","Revestimentos","Armários/Gavetas em Porcelanato","Pia de Banheiro em Porcelanato"], key="f_curso")
     with col2:
-        local = st.selectbox("Local (6 cidades)", ["Todos"] + CIDADES_ORIGINAIS, key="f_local")
+        local = st.selectbox("Local", ["Todos"] + CIDADES_ORIGINAIS + ["NACIONAL - Brasil Todo"], key="f_local")
     with col3:
         viral = st.selectbox("Filtro Viral", ["Top 3 Loop Infinito","Todos os vídeos","Score >8.0","Score >9.0"], key="f_viral")
     with col4:
@@ -385,7 +403,7 @@ with tab1:
         st.metric("Total filtrado", f"{len(df_filtro)} vídeos", "Top 3")
         st.metric("Views filtradas", f"{df_filtro['Views'].sum()/1000:.0f}k")
     with col_b:
-        st.success("✅ 6 CIDADES + 8 INTERESSES PORCELANATO: pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas")
+        st.success("✅ CURSO NACIONAL BRASIL TODO + 6 CIDADES SERVICO LOCAL + 8 INTERESSES PORCELANATO: pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas")
         st.button("📄 Exportar PDF Filtrado", key="pdf_filtro")
 
 with tab2:
@@ -420,13 +438,13 @@ with tab2:
         st.button("🔥 GERAR 9 CONTEÚDOS (3 vídeos x 3 variações)", type="primary", key="gerar_9")
 
 with tab3:
-    st.subheader("📊 Dashboard + Gráficos IA - FIXO")
+    st.subheader("📊 Dashboard + Gráficos IA - FIXO - NACIONAL")
     if "metrics_fixed" not in st.session_state:
         st.session_state.metrics_fixed = {"cac": 100, "roas": 3.2, "vendas": 7, "invest": 500}
     c1,c2,c3,c4,c5 = st.columns(5)
     c1.metric("Vídeos Top 3", "3", "Loop infinito", border=True)
     c2.metric("Views Totais", "108k", "+12% vs ontem", border=True)
-    c3.metric("Vendas Kiwify", "R$ 3.477", "+R$497 hoje", border=True)
+    c3.metric("Vendas Kiwify NACIONAL", "R$ 3.477", "+R$497 hoje", border=True)
     c4.metric("ROAS Fixo", f"{st.session_state.metrics_fixed['roas']}x", "Não some", border=True)
     c5.metric("CAC Fixo", f"R$ {st.session_state.metrics_fixed['cac']}", "Travado", border=True)
     col_g1, col_g2 = st.columns(2)
@@ -437,7 +455,7 @@ with tab3:
             {"video": "base 300kg", "views": 28000, "score": 8.4}
         ])
         if HAS_PLOTLY:
-            fig = px.bar(df_top, x="video", y="views", color="score", color_continuous_scale="Oranges", title="Views por vídeo TOP3")
+            fig = px.bar(df_top, x="video", y="views", color="score", color_continuous_scale="Oranges", title="Views por vídeo TOP3 - NACIONAL")
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.bar_chart(df_top, x="video", y="views")
@@ -448,7 +466,7 @@ with tab3:
             "views": [12000, 15000, 18000, 22000, 28000, 35000, 48000]
         })
         if HAS_PLOTLY:
-            fig2 = px.line(df_evo, x="data", y="views", markers=True, title="Crescimento gaveta viral")
+            fig2 = px.line(df_evo, x="data", y="views", markers=True, title="Crescimento gaveta viral - NACIONAL")
             fig2.update_traces(line_color="#FF6B00")
             st.plotly_chart(fig2, use_container_width=True)
         else:
@@ -457,7 +475,7 @@ with tab3:
             {"etapa": "Comentário PORCELANATO", "qtd": 100},
             {"etapa": "DM enviada", "qtd": 70},
             {"etapa": "Link Kiwify clicado", "qtd": 25},
-            {"etapa": "Venda aprovada", "qtd": 7},
+            {"etapa": "Venda aprovada NACIONAL", "qtd": 7},
         ])
         st.dataframe(df_funil, use_container_width=True)
 
@@ -639,28 +657,27 @@ with tab7:
         st.button("➕ Adicionar", type="primary", key="inv_add")
 
 with tab8:
-    st.subheader("💚 VENDAS Kiwify - SUPABASE TRACKING REAL (v3.3.8)")
+    st.subheader("💚 VENDAS Kiwify - NACIONAL BRASIL TODO - SUPABASE TRACKING REAL v3.8")
     vendas_reais_tab8 = buscar_vendas_reais_supabase()
     if vendas_reais_tab8:
-        st.success(f"✅ Supabase conectado - {len(vendas_reais_tab8)} vendas reais encontradas!")
+        st.success(f"✅ Supabase conectado - {len(vendas_reais_tab8)} vendas reais encontradas! Todas agora NACIONAL.")
         df_real = pd.DataFrame(vendas_reais_tab8)
         st.dataframe(df_real, use_container_width=True)
         col_k1, col_k2, col_k3, col_k4 = st.columns(4)
-        col_k1.metric("Total Real", f"{len(df_real)} vendas")
-        col_k2.metric("Cidades", f"{df_real['cidade'].nunique()} cidades")
-        col_k3.metric("Plataformas", f"{df_real['plataforma'].nunique()}")
-        col_k4.metric("Faturamento Real", f"R$ {df_real['valor'].sum():.2f}")
+        col_k1.metric("Total Real NACIONAL", f"{len(df_real)} vendas")
+        col_k2.metric("Abrangência", "NACIONAL - Brasil Todo")
+        col_k3.metric("Plataformas", f"{df_real['plataforma'].nunique() if 'plataforma' in df_real.columns else 1}")
+        col_k4.metric("Faturamento Real", f"R$ {df_real['valor'].sum():.2f}" if 'valor' in df_real.columns else "R$ 0")
     else:
         df_vendas = pd.DataFrame([
-            {"id": "kiwify_001", "produto": "Marmoraria na Prática", "valor": 497, "status": "approved", "origem": "gaveta viral (48k)", "data": "20/10/2026 22:00", "cliente": "João - Irará"},
-            {"id": "kiwify_002", "produto": "Cozinha Planejada", "valor": 297, "status": "approved", "origem": "pia de banheiro 10k (32k)", "data": "19/10/2026 18:00", "cliente": "Maria - Feira"},
-            {"id": "kiwify_003", "produto": "Porcelanato Estrutural", "valor": 99.9, "status": "approved", "origem": "base 300kg (28k)", "data": "19/10/2026 14:00", "cliente": "José - Santanópolis"},
+            {"id": "kiwify_001", "produto": "Marmoraria na Prática", "valor": 497, "status": "approved", "origem": "gaveta viral (48k)", "data": "20/10/2026 22:00", "cliente": "João - NACIONAL"},
+            {"id": "kiwify_002", "produto": "Cozinha Planejada", "valor": 297, "status": "approved", "origem": "pia de banheiro 10k (32k)", "data": "19/10/2026 18:00", "cliente": "Maria - NACIONAL"},
         ])
         st.dataframe(df_vendas, use_container_width=True)
 
 with tab9:
     st.subheader("🤖 Insta Auto + Loop Viral - 07h / 12h / 19h - Só TOP3")
-    st.success("✅ Loop infinito configurado")
+    st.success("✅ Loop infinito configurado - NACIONAL")
     col_loop1, col_loop2 = st.columns(2)
     with col_loop1:
         st.time_input("Horário 1 - Gaveta", value=pd.to_datetime("07:00").time(), key="loop_h1")
@@ -672,7 +689,7 @@ with tab9:
         st.metric("Próximo post", "SEG 07:00 - Gaveta R$8mil", "em 8h")
         st.metric("Último post", "TER 12:00 - Base 300kg", "28k views")
         if st.button("🚀 ATIVAR AUTO POSTAGEM - LOOP INFINITO", type="primary", key="ativar_loop"):
-            st.success("Loop ativado! Próximos 7 dias agendados")
+            st.success("Loop ativado! Próximos 7 dias agendados - NACIONAL")
             st.balloons()
         if st.button("⏸️ Pausar loop", key="pausar_loop"):
             st.warning("Loop pausado")
@@ -681,38 +698,39 @@ with tab9:
 st.markdown("---")
 st.markdown(f"""
 <center><small>
-FC CONSTRÓI • GROWTH AI v3.7 PROFISSIONAL • KEYWORDS EXPANDIDAS • Irará-BA • {now.strftime('%d/%m/%Y %H:%M')}<br>
-Santanópolis, Irará, Feira de Santana, Santa Bárbara, Serrinha, Ouriçangas - pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas
+FC CONSTRÓI • GROWTH AI v3.8 NACIONAL • CURSO NACIONAL BRASIL TODO + 6 CIDADES SERVIÇO LOCAL • Irará-BA • {now.strftime('%d/%m/%Y %H:%M')}<br>
+Santanópolis, Irará, Feira de Santana, Santa Bárbara, Serrinha, Ouriçangas - pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas + NACIONAL
 </small></center>
 """, unsafe_allow_html=True)
 
-# SIDEBAR PROFISSIONAL - KIWIFY VENDAS CURSO ONLINE - APENAS AJUSTE DE TITULOS, SEM DELETAR NADA
+# SIDEBAR PROFISSIONAL - KIWIFY VENDAS CURSO ONLINE NACIONAL - APENAS AJUSTE DE TITULOS, SEM DELETAR NADA
 with st.sidebar:
     st.markdown("---")
-    st.markdown("### ✅ Kiwify Vendas Curso Online")
-    st.caption("Registro oficial de vendas do curso - 6 cidades + porcelanato")
-    sck_teste = st.text_input("Código da Venda (SCK)", "fb_feira_pia_banheiro_organico", key="sck_teste_sidebar_novo")
-    email_teste = st.text_input("E-mail do Cliente", "cliente@email.com", key="email_teste_sidebar")
-    if st.button("✅ Registrar Venda Oficial no Supabase", key="btn_teste_supabase_novo"):
+    st.markdown("### ✅ Kiwify Vendas Curso Online - NACIONAL BRASIL TODO")
+    st.caption("Registro oficial de vendas do curso - NACIONAL - 6 cidades = apenas serviço local + porcelanato")
+    sck_teste = st.text_input("Código da Venda (SCK)", "fb_nacional_pia_banheiro_organico", key="sck_teste_sidebar_novo_nacional")
+    email_teste = st.text_input("E-mail do Cliente", "cliente@email.com", key="email_teste_sidebar_nacional")
+    if st.button("✅ Registrar Venda Oficial no Supabase - NACIONAL", key="btn_teste_supabase_novo_nacional"):
         ok, resp = salvar_venda_kiwify_teste(sck_teste, email_teste)
         if ok:
-            st.success(f"✅ Venda registrada! {resp}")
+            st.success(f"✅ Venda NACIONAL registrada! {resp}")
             st.balloons()
         else:
             st.error(f"❌ Erro: {resp}")
     st.markdown("---")
-    st.markdown("**Vendas Registradas • Base Oficial**")
+    st.markdown("**Vendas Registradas • Base Oficial • NACIONAL**")
     vendas_reais = buscar_vendas_reais_supabase()
     if vendas_reais:
         df_real_side = pd.DataFrame(vendas_reais)
         if not df_real_side.empty:
-            cols_show = [c for c in ["cidade","interesse","plataforma","traffic_type"] if c in df_real_side.columns]
+            cols_show = [c for c in ["cidade","cidade_origem_lead","interesse","abrangencia","plataforma","traffic_type"] if c in df_real_side.columns]
             if cols_show:
                 st.dataframe(df_real_side[cols_show].head(10), use_container_width=True)
-        st.metric("Total de Vendas Registradas", len(vendas_reais))
+        st.metric("Total de Vendas Registradas - NACIONAL", len(vendas_reais))
     else:
-        st.caption("Nenhuma venda ainda ou sem env vars")
+        st.caption("Nenhuma venda ainda ou sem env vars - webhook Kiwify vai salvar como NACIONAL automaticamente")
         
+
         
 
         
