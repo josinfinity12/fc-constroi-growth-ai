@@ -1,7 +1,6 @@
-# FC CONSTRÓI • GROWTH AI v3.3.8 AUTO ONLINE - PUXA INSTA + GERA THUMB 1280x720 AUTOMATICO
-# Baseado no seu v3.3.7 - 9 ABAS + SUPABASE KIWIFY + LOOP VIRAL + THUMBNAIL 1280x720
+# FC CONSTRÓI • GROWTH AI v3.7 PROFISSIONAL - Kiwify Vendas Curso Online
+# FIX PROFISSIONAL: Remove TESTE KIWIFY -> Kiwify Vendas Curso Online + remove testes
 # REGRA: NUNCA DELETAR NADA - SÓ ADICIONAR/CORRIGIR
-# FIX v3.4.0 - CIDADES + KEYWORDS EXPANDIDAS: pia de banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas
 
 import streamlit as st
 import pandas as pd
@@ -39,7 +38,6 @@ try:
 except ImportError:
     HAS_PLOTLY = False
 
-# CIDADES ORIGINAIS CORRETAS - FIX v3.3.9
 CIDADES_ORIGINAIS = [
     "Santanópolis",
     "Irará",
@@ -65,7 +63,6 @@ def extrair_filtros_sck(sck_full: str):
     elif "serrinha" in s: cid = "serrinha"
     elif "ouricangas" in s or "ouriçangas" in s: cid = "ouricangas"
     inter = "porcelanato"
-    # CORREÇÃO: pia esculpida -> pia de banheiro + EXPANSÃO TUDO EM PORCELANATO
     if "pia de banheiro" in s or "pia_banheiro" in s or "pia esculpida" in s or "pia_esculpida" in s or "pia_90" in s or "_pia_" in s:
         inter = "pia_de_banheiro"
     elif "closet" in s:
@@ -90,7 +87,7 @@ def extrair_filtros_sck(sck_full: str):
     traffic = "pago" if pago else "organico"
     return plat, cid, inter, traffic
 
-def salvar_venda_kiwify_teste(sck_teste: str, email_teste="teste@irara.com"):
+def salvar_venda_kiwify_teste(sck_teste: str, email_teste="cliente@email.com"):
     try:
         supa_url = os.getenv("SUPABASE_URL")
         supa_key = os.getenv("SUPABASE_KEY")
@@ -269,7 +266,7 @@ def gerar_thumbs_auto_com_insta(foto_pessoa_pil, lista_obras_insta, texto, subte
     return thumbs
 
 st.set_page_config(
-    page_title="FC CONSTROI • GROWTH AI v3.3.8",
+    page_title="FC CONSTROI • GROWTH AI v3.7 PROFISSIONAL",
     layout="wide",
     page_icon="🏗️",
     initial_sidebar_state="collapsed"
@@ -341,7 +338,7 @@ now = get_now_bahia()
 st.markdown(f"""
 <div class="main-header">
 <div>
-<b>FC CONSTRÓI • GROWTH AI v3.4.0 KEYWORDS EXPANDIDAS</b> 
+<b>FC CONSTRÓI • GROWTH AI v3.7 PROFISSIONAL - Kiwify Vendas Curso Online</b> 
 <span style="color:#FF6B00">• 9 ABAS • 6 CIDADES • 8 NOVOS INTERESSES PORCELANATO</span>
 <br><small style="color:#aaa">Loop TOP3: gaveta (48k) | pia de banheiro (32k) | base (28k) - Keywords: pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas</small>
 </div>
@@ -362,7 +359,7 @@ tab_names = [
     "💰 CAC CPA ROAS",
     "💹 INVESTIMENTOS",
     "💚 VENDAS Kiwify",
-    "🤖 Insta Auto + Loop Viral [NOVO]"
+    "🤖 Insta Auto + Loop Viral"
 ]
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(tab_names)
 
@@ -662,7 +659,7 @@ with tab8:
         st.dataframe(df_vendas, use_container_width=True)
 
 with tab9:
-    st.subheader("🤖 Insta Auto + Loop Viral [NOVO] - 07h / 12h / 19h - Só TOP3")
+    st.subheader("🤖 Insta Auto + Loop Viral - 07h / 12h / 19h - Só TOP3")
     st.success("✅ Loop infinito configurado")
     col_loop1, col_loop2 = st.columns(2)
     with col_loop1:
@@ -684,25 +681,27 @@ with tab9:
 st.markdown("---")
 st.markdown(f"""
 <center><small>
-FC CONSTRÓI • GROWTH AI v3.4.0 • KEYWORDS EXPANDIDAS • Irará-BA • {now.strftime('%d/%m/%Y %H:%M')}<br>
+FC CONSTRÓI • GROWTH AI v3.7 PROFISSIONAL • KEYWORDS EXPANDIDAS • Irará-BA • {now.strftime('%d/%m/%Y %H:%M')}<br>
 Santanópolis, Irará, Feira de Santana, Santa Bárbara, Serrinha, Ouriçangas - pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas
 </small></center>
 """, unsafe_allow_html=True)
 
+# SIDEBAR PROFISSIONAL - KIWIFY VENDAS CURSO ONLINE - APENAS AJUSTE DE TITULOS, SEM DELETAR NADA
 with st.sidebar:
     st.markdown("---")
-    st.markdown("### 🧪 TESTE KIWIFY (NOVO)")
-    sck_teste = st.text_input("SCK teste", "fb_feira_pia_banheiro_organico", key="sck_teste_sidebar_novo")
-    email_teste = st.text_input("Email teste", "teste@irara.com", key="email_teste_sidebar")
-    if st.button("💾 Salvar venda TESTE no Supabase", key="btn_teste_supabase_novo"):
+    st.markdown("### ✅ Kiwify Vendas Curso Online")
+    st.caption("Registro oficial de vendas do curso - 6 cidades + porcelanato")
+    sck_teste = st.text_input("Código da Venda (SCK)", "fb_feira_pia_banheiro_organico", key="sck_teste_sidebar_novo")
+    email_teste = st.text_input("E-mail do Cliente", "cliente@email.com", key="email_teste_sidebar")
+    if st.button("✅ Registrar Venda Oficial no Supabase", key="btn_teste_supabase_novo"):
         ok, resp = salvar_venda_kiwify_teste(sck_teste, email_teste)
         if ok:
-            st.success(f"✅ Salvo! {resp}")
+            st.success(f"✅ Venda registrada! {resp}")
             st.balloons()
         else:
             st.error(f"❌ Erro: {resp}")
     st.markdown("---")
-    st.markdown("**Vendas Reais Supabase (prova)**")
+    st.markdown("**Vendas Registradas • Base Oficial**")
     vendas_reais = buscar_vendas_reais_supabase()
     if vendas_reais:
         df_real_side = pd.DataFrame(vendas_reais)
@@ -710,11 +709,10 @@ with st.sidebar:
             cols_show = [c for c in ["cidade","interesse","plataforma","traffic_type"] if c in df_real_side.columns]
             if cols_show:
                 st.dataframe(df_real_side[cols_show].head(10), use_container_width=True)
-        st.metric("Total no banco", len(vendas_reais))
+        st.metric("Total de Vendas Registradas", len(vendas_reais))
     else:
         st.caption("Nenhuma venda ainda ou sem env vars")
-
-
+        
         
 
         
