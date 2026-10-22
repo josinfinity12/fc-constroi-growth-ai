@@ -707,7 +707,7 @@ Santanópolis, Irará, Feira de Santana, Santa Bárbara, Serrinha, Ouriçangas -
 with st.sidebar:
     st.markdown("---")
     st.markdown("### ✅ Kiwify Vendas Curso Online - NACIONAL BRASIL TODO")
-    st.caption("Registro oficial de vendas do curso - NACIONAL - 6 cidades = apenas serviço local + porcelanato")
+    st.caption("Registro oficial de vendas do curso - NACIONAL ")
     sck_teste = st.text_input("Código da Venda (SCK)", "fb_nacional_pia_banheiro_organico", key="sck_teste_sidebar_novo_nacional")
     email_teste = st.text_input("E-mail do Cliente", "cliente@email.com", key="email_teste_sidebar_nacional")
     if st.button("✅ Registrar Venda Oficial no Supabase - NACIONAL", key="btn_teste_supabase_novo_nacional"):
@@ -729,7 +729,7 @@ with st.sidebar:
         st.metric("Total de Vendas Registradas - NACIONAL", len(vendas_reais))
     else:
         st.caption("Nenhuma venda ainda ou sem env vars - webhook Kiwify vai salvar como NACIONAL automaticamente")
-        
+
 
         
 
