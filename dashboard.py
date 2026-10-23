@@ -614,28 +614,28 @@ with tab1:
     with col_b:
         st.success("✅ CURSO NACIONAL BRASIL TODO + 6 CIDADES SERVICO LOCAL + 8 INTERESSES PORCELANATO: pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas")
         st.button("📄 Exportar PDF Filtrado", key="pdf_filtro")
-        with tab2:
-            st.subheader("🔄 Reciclar Conteúdo - Pega 1 vídeo longo do YouTube e gera 3 versões (Shorts + Reels + Descrição) - RESTAURADO v3.9")
-        url_long = st.text_input("Cole link YouTube LONGO", placeholder="https://youtube.com/watch?v=...", key="rec_url_longo_v39")
+            with tab2:
+                st.subheader("🔄 Reciclar Conteúdo - Pega 1 vídeo longo do YouTube e gera 3 versões (Shorts + Reels + Descrição) - RESTAURADO v3.9")
+        url_long = st.text_input("Cole link YouTube LONGO", placeholder="https://youtube.com/watch?v=...", key="rec_url_longo_v39_final")
         col_rec1, col_rec2 = st.columns([2,1])
         with col_rec1:
-            tema_rec = st.text_input("Tema do vídeo longo", "Gaveta porcelanato erro R$8mil", key="rec_tema_longo_v39")
+            tema_rec = st.text_input("Tema do vídeo longo", "Gaveta porcelanato erro R$8mil", key="rec_tema_longo_v39_final")
         with col_rec2:
-            if st.button("🚀 GERAR 3 VERSÕES - SHORTS + REELS + DESCRIÇÃO", type="primary", key="btn_rec_3versoes_v39"):
+            if st.button("🚀 GERAR 3 VERSÕES - SHORTS + REELS + DESCRIÇÃO", type="primary", key="btn_rec_3versoes_v39_final"):
                 st.success(f"🏆 1 vídeo longo ({tema_rec}) reciclado em 3 versões!")
         c_s, c_f, c_d = st.columns(3)
-                with c_s:
-                st.markdown("**📱 VERSÃO 1: SHORTS 60s (Gancho Choque)**")
-                st.text_area("Shorts Script 60s", f"GANCHO 3s: Você tá perdendo R$8mil nessa gaveta!\n00:03-00:15 Erro 95% erram\n00:15-00:50 Como fazer certo\n00:50-01:00 CTA: Comenta GAVETA\nTEMA: {tema_rec}", height=180, key="shorts_out_v39")
-                st.code("Formato: 9:16 1080x1920 | Score 9.2 | TOP1 VIRAL", language="text")
-            with c_r:
-                st.markdown("**📸 VERSÃO 2: REELS 90s (Antes/Depois)**")
-                st.text_area("Reels Script 90s", f"ANTES: Gaveta empenada / DEPOIS: Gaveta 300kg\nLegenda: Transformação completa {tema_rec}\nHashtags: #marmoraria #porcelanato\nCTA: Comenta EU QUERO", height=180, key="reels_out_v39")
-                st.code("Formato: 9:16 1080x1920 | Score 8.7 | ANTES/DEPOIS", language="text")
-            with c_d:
-                st.markdown("**📝 VERSÃO 3: DESCRIÇÃO LONGA + TAGS**")
-                st.text_area("Descrição SEO + Tags", f"Curso porcelanato líquido - Academia FC Constrói - NACIONAL BRASIL TODO\nTEMA: {tema_rec}\n\n00:00 Intro Erro R$8mil\n02:30 Passo a passo correto\nLink Kiwify Curso Online NACIONAL: pay.kiwify.com.br/...\n#porcelanato #fcconstroi #gaveta", height=180, key="desc_out_v39")
-                st.code("SEO: Curso Online NACIONAL + Serviço Local 6 cidades + 8 interesses", language="text")
+        with c_s:
+            st.markdown("** VERSÃO 1: SHORTS 60s (Gancho Choque)**")
+            st.text_area("Shorts Script 60s", f"GANCHO 3s: Você tá perdendo R$8mil nessa gaveta!\n00:03-00:15 Erro 95% erram\n00:15-00:50 Como fazer certo\n00:50-01:00 CTA: Comenta GAVETA", height=180, key="shorts_v39_final")
+            st.code("Formato: 9:16 1080x1920 | Score 9.2 | TOPI VIRAL", language="text")
+        with c_f:
+            st.markdown("** VERSÃO 2: REELS 90s (Antes/Depois)**")
+            st.text_area("Reels Script 90s", f"ANTES: Gaveta empenada / DEPOIS: Gaveta 300kg\nLegenda: Transformação completa ({tema_rec})\nHashtags: #marmoraria #porcelanato", height=180, key="reels_v39_final")
+            st.code("Formato: 9:16 1080x1920 | Score 8.7 | ANTES/DEPOIS", language="text")
+        with c_d:
+            st.markdown("** VERSÃO 3: DESCRIÇÃO + TAGS**")
+            st.text_area("Descrição SEO + Tags", f"Curso porcelanato liquido - Academia FC Constrói - NACIONAL BRASIL TODO\nTEMA: {tema_rec}\n00:00 Intro Erro R$8mil\n02:30 Passo a passo", height=180, key="desc_v39_final")
+            st.code("SEO: Curso Online NACIONAL + Serviço Local 6 cidades + 8 interesses", language="text")
     st.markdown("---")
     st.subheader("♻️ Reciclar Conteúdo - Transforma TOP3 em 9 conteúdos novos - MANTIDO ORIGINAL")
     for key, val in PARAMS.items():
