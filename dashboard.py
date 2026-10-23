@@ -624,8 +624,8 @@ with tab1:
         if st.button("♻️ GERAR 3 VERSÕES - SHORTS + REELS + DESCRIÇÃO", type="primary", key="btn_rec_3versoes_v39"):
             st.success(f"✅ 1 vídeo longo ({tema_rec}) reciclado em 3 versões!")
         c_s, c_f, c_d = st.columns(3)
-              with c_s:
-                st.markdown("**📱 VERSÃO 1: SHORTS 60s (Gancho Choque)**")
+        with c_s:
+            st.markdown("**📱 VERSÃO 1: SHORTS 60s (Gancho Choque)**")
                 st.text_area("Shorts Script 60s", f"GANCHO 3s: Você tá perdendo R$8mil nessa gaveta!\n00:03-00:15 Erro 95% erram\n00:15-00:50 Como fazer certo\n00:50-01:00 CTA: Comenta GAVETA\nTEMA: {tema_rec}", height=180, key="shorts_out_v39")
                 st.code("Formato: 9:16 1080x1920 | Score 9.2 | TOP1 VIRAL", language="text")
             with c_r:
