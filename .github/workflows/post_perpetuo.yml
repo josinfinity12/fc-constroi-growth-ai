@@ -1,5 +1,7 @@
 name: FC Post Perpetuo 5 Redes ES
 on:
+  schedule:
+    - cron: '0 10,15,22 * * *'
   workflow_dispatch:
 jobs:
   post:
