@@ -63,16 +63,14 @@ def puxar_3_reels_reais_auto_instagram(username="fc_constroi", output_dir="/tmp"
                         clip = ColorClip(size=(1080,1920), color=(20,20,20), duration=8)
                         clip.write_videofile(video_pt_path, fps=24, codec="libx264", audio_codec="aac")
                         clip.close()
-                    except: pass
+                    except:
+                        pass
             final_path, status_final = montar_video_final_es_automatizado(video_pt_path, audio_path, es["titulo_es"], output_name=f"v43_{reel['id']}_FINAL_ES_9x16.mp4") if os.path.exists(video_pt_path) and audio_path else (None, "sem_video_ou_audio")
             resultados.append({"id": reel["id"], "titulo_pt": reel["titulo"], "titulo_es": es["titulo_es"], "views": reel["views"], "score": reel["score"], "url": reel["url"], "video_pt_path": video_pt_path, "audio_es_path": audio_path, "audio_status": status_audio, "video_final_path": final_path, "video_final_status": status_final})
         except Exception as e:
             resultados.append({"id": reel["id"], "erro": str(e)})
     return resultados
 # ===== FIM UPGRADE v4.3 =====
-
-try:
-    from designer import aplicar_design
     HAS_DESIGNER = True
 except ImportError:
     HAS_DESIGNER = False
