@@ -616,13 +616,6 @@ with tab1:
         st.button("📄 Exportar PDF Filtrado", key="pdf_filtro")
     with tab2:
     st.subheader("♻️ Reciclar Conteúdo - Pega 1 vídeo longo do YouTube e gera 3 versões (Shorts + Reels + Descrição) - RESTAURADO v3.9")
-    url_long = st.text_input("Cole link YouTube LONGO", placeholder="https://youtube.com/watch?v=...", key="rec_url_longo_v39")
-    col_rec1, col_rec2 = st.columns([2,1])
-    with col_rec1:
-        tema_rec = st.text_input("Tema do vídeo longo", "Gaveta porcelanato erro R$8mil", key="rec_tema_longo_v39")
-    with col_rec2:
-        if st.button("♻️ GERAR 3 VERSÕES - SHORTS + REELS + DESCRIÇÃO", type="primary", key="btn_rec_3versoes_v39"):
-            st.success(f"✅ 1 vídeo longo ({tema_rec}) reciclado em 3 versões!")
     st.markdown("#### 🚀 RESTAURADO GOLD: 1 vídeo longo -> 3 versões - ADICIONADO")
     url_long = st.text_input("Cole link YouTube LONGO (ex: 20min gaveta R$8mil)", placeholder="https://youtube.com/watch?v=...", key="rec_url_longo_v39")
     col_rec1, col_rec2 = st.columns([2,1])
@@ -1321,15 +1314,3 @@ with st.sidebar:
     if "videos_virais_temporal_es" in st.session_state:
         st.metric("Vídeos Virais Temporal Filtrados", len(st.session_state["videos_virais_temporal_es"]))
         
-
-
-        
-
-
-        
-
-        
-        
-
-
-
