@@ -1,37 +1,26 @@
 name: FC Post Perpetuo 5 Redes ES
-
 on:
   schedule:
-    - cron: '0 10,15,22 * * *'
+    - cron: "0 10,15,22 * * *"
   workflow_dispatch:
-
 jobs:
   post-perpetuo:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
-
+          python-version: "3.10"
       - name: Install deps
         run: |
-          pip install yt-dlp==2023.12.30 moviepy==1.0.3 gTTS requests
+          pip install yt-dlp moviepy==1.0.3 gTTS requests
           sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Rodar auto post perpetuo
-        env:
-          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
-        run: |
-          python auto_post_perpetuo.py
-
+      - name: Rodar auto post
+        run: python auto_post_perpetuo.py
       - name: Salvar videos
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: videos-finais-es
           path: videos_es_final/
-          
           
