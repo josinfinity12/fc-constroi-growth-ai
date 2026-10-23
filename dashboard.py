@@ -615,7 +615,7 @@ with tab1:
         st.success("✅ CURSO NACIONAL BRASIL TODO + 6 CIDADES SERVICO LOCAL + 8 INTERESSES PORCELANATO: pia banheiro, closet, bancada cozinha, fachadas, nichos, revestimentos, armarios, gavetas")
         st.button("📄 Exportar PDF Filtrado", key="pdf_filtro")
         with tab2:
-        st.subheader("🔄 Reciclar Conteúdo - Pega 1 vídeo longo do YouTube e gera 3 versões (Shorts + Reels + Descrição) - RESTAURADO v3.9")
+            st.subheader("🔄 Reciclar Conteúdo - Pega 1 vídeo longo do YouTube e gera 3 versões (Shorts + Reels + Descrição) - RESTAURADO v3.9")
         url_long = st.text_input("Cole link YouTube LONGO", placeholder="https://youtube.com/watch?v=...", key="rec_url_longo_v39")
         col_rec1, col_rec2 = st.columns([2,1])
         with col_rec1:
