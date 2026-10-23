@@ -1178,14 +1178,12 @@ with tab10:
                                     from gtts import gTTS
                                     gTTS(text=f"Error de 8000 dolares en {v['titulo']}", lang='es').save(audio_path)
                                 video_path, status_v = baixar_video_temporal_insta_real(v['url'], output_dir="/tmp")
-                                if video_path:
-                                    final_path, status_f = montar_video_final_es_automatizado(video_path, audio_path, f"{v['id']}_FINAL_ES_9x16.mp4")
-                                    st.success(f"✅ {v['id']} FINAL PRONTO")
-                            with open(final_path, "rb") as vf:
-                st.download_button(f"⬇️ BAIXAR VIDEO FINAL ES 9:16 - {v['id']}", vf.read(), file_name=f"{v['id']}_FINAL_ES_9x16.mp4", key=f"dl_final_auto_{v['id']}")
-# Mantém seus botões antigos abaixo se quiser manual, mas o AUTO já faz tudo acima
-    with col_es2: voz_es = st.selectbox("Voz ElevenLabs ES", ["Masculina Obra (Adam pNInz6obpgDQGcFmaJgB)", "Femenina Profesional (Rachel 21m00Tcm4TlvDq8ikWAM)", "Masculina Joven"], key="voz_es_v40")
-    with col_es3: redes_es_sel = st.multiselect("5 Redes ES novas", REDES_ES, default=REDES_ES, key="redes_es_sel_v40")
+                                                            if video_path:
+                                final_path, status_f = montar_video_final_es_automatizado(video_path, audio_path, f"{v['id']}_FINAL_ES_9x16.mp4")
+                                st.success(f"✅ {v['id']} FINAL PRONTO")
+                                st.video(final_path)
+                                with open(final_path, "rb") as vf:
+                                    st.download_button(f"⬇️ BAIXAR VIDEO FINAL ES 9:16 - {v['id']}", vf.read(), file_name=f"{v['id']}_FINAL_ES_9x16.mp4", key=f"dl_final_auto_{v['id']}")
     if st.button("🇪🇸 1 CLIQUE: PEGAR TOP3 PT (48k/32k/28k) E GERAR 9 CONTEÚDOS ES NARRADOS - ONLINE PERPÉTUO", type="primary", key="btn_top3_pt_para_9_es_v40"):
         st.balloons()
         st.success(f"✅ TOP3 PT modelado para {idioma_es} - Voz: {voz_es} - {len(redes_es_sel)} redes - 9 conteúdos ES gerados online perpétuo!")
@@ -1324,5 +1322,6 @@ with st.sidebar:
     else: st.error("❌ Sem Key ES - Cole no secrets.toml [ES]")
     if "videos_virais_temporal_es" in st.session_state:
         st.metric("Vídeos Virais Temporal Filtrados", len(st.session_state["videos_virais_temporal_es"]))
+        
         
         
