@@ -19,9 +19,9 @@ pytz
 fpdf
 flask
 gunicorn
+imageio-ffmpeg
+moviepy==1.0.3
 yt-dlp
 elevenlabs
 gtts
-moviepy
-imageio-ffmpeg
 
