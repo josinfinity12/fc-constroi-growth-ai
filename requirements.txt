@@ -20,3 +20,8 @@ fpdf
 flask
 gunicorn
 yt-dlp
+elevenlabs
+gtts
+moviepy
+imageio-ffmpeg
+
