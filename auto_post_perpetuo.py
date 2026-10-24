@@ -3,19 +3,62 @@ from datetime import datetime
 
 def log(m): print(f"[{datetime.now()}] {m}", flush=True)
 
-PAGE_ID = os.getenv("PAGE_ID")
-PAGE_TOKEN = os.getenv("PAGE_TOKEN")
+# ========== ATUALIZADO - PEGA TOKENS NOVOS SEM PERDER ANTIGOS ==========
+# Agora aceita FB_PAGE_ID, FB_PAGE_TOKEN, FB_SYSTEM_TOKEN + mantém PAGE_ID antigo
+PAGE_ID = (os.getenv("FB_PAGE_ID") or os.getenv("PAGE_ID") or os.getenv("FACEBOOK_PAGE_ID") or "1376850792182671").strip()
+PAGE_TOKEN = (os.getenv("FB_PAGE_TOKEN") or os.getenv("PAGE_TOKEN") or os.getenv("FB_SYSTEM_TOKEN") or os.getenv("FACEBOOK_PAGE_TOKEN") or "").strip()
+
+# Mantém seus outros tokens antigos
+ELEVEN_API = (os.getenv("ELEVENLABS_API_KEY") or "").strip()
+ELEVEN_VOICE = (os.getenv("ELEVENLABS_VOICE_ID") or os.getenv("VOICE_ID") or "").strip()
+
+log(f"PAGE_ID carregado: {PAGE_ID}")
+log(f"PAGE_TOKEN: {'OK ' + str(len(PAGE_TOKEN)) + ' chars' if PAGE_TOKEN else 'VAZIO - verifique secrets'}")
+log(f"ELEVENLABS: {'OK' if ELEVEN_API else 'usando gTTS gratis'}")
+
+# ========== FUNÇÃO NOVA - GERA VOZ SEM ERRO ==========
+def gerar_voz_es_com_fallback(texto_es, temp_mp3_es):
+    """Tenta ElevenLabs, se der erro usa gTTS gratis sem bloqueio"""
+    from gtts import gTTS
+    
+    # 1. TENTA ELEVENLABS SE TIVER CREDITO
+    if ELEVEN_API and ELEVEN_VOICE and len(ELEVEN_API) > 20:
+        try:
+            log(f"Tentando ElevenLabs voz {ELEVEN_VOICE[:8]}...")
+            url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVEN_VOICE}"
+            headers = {"xi-api-key": ELEVEN_API, "Content-Type": "application/json"}
+            payload = {
+                "text": texto_es,
+                "model_id": "eleven_multilingual_v2",
+                "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}
+            }
+            r = requests.post(url, headers=headers, json=payload, timeout=90)
+            if r.status_code == 200:
+                with open(temp_mp3_es, 'wb') as f:
+                    f.write(r.content)
+                log("ElevenLabs OK!")
+                return True
+            else:
+                log(f"ElevenLabs falhou {r.status_code}: {r.text[:300]} -> usando gTTS")
+        except Exception as e:
+            log(f"ElevenLabs erro {e} -> usando gTTS")
+
+    # 2. FALLBACK GRATIS QUE NUNCA BLOQUEIA
+    try:
+        log("4/5 Gerando voz ES com gTTS (gratis sem bloqueio)...")
+        tts = gTTS(text=texto_es, lang='es', tld='com.mx', slow=False)
+        tts.save(temp_mp3_es)
+        log("gTTS OK!")
+        return True
+    except Exception as e:
+        log(f"gTTS erro {e}")
+        return False
 
 # ========== PIPELINE 100% AUTO PT-BR -> ES ==========
 def dublar_pt_para_es_automatico(video_path_pt):
-    """
-    INPUT: video em PT-BR com voz do Francis
-    OUTPUT: video dublado em ES
-    """
     try:
         import whisper
         from moviepy.editor import VideoFileClip, AudioFileClip
-        from gtts import gTTS
 
         log(f"--- TRADUTOR AUTOMATICO PT-BR -> ES INICIADO ---")
         log(f"Video PT original: {video_path_pt}")
@@ -24,12 +67,10 @@ def dublar_pt_para_es_automatico(video_path_pt):
         temp_mp3_es = "temp_es.mp3"
         video_saida_es = video_path_pt.replace(".mp4","_ES_DUBLADO.mp4").replace(".MP4","_ES_DUBLADO.mp4")
         
-        # Se já for dublado, não redubla
         if "_ES_DUBLADO" in video_path_pt or "_ES" in video_path_pt:
             log("Esse video já é ES, usando direto")
             return video_path_pt, ""
 
-        # 1. Extrair audio PT-BR
         log("1/5 Extraindo voz PT-BR...")
         clip = VideoFileClip(video_path_pt)
         if clip.audio is None:
@@ -38,7 +79,6 @@ def dublar_pt_para_es_automatico(video_path_pt):
         clip.audio.write_audiofile(temp_wav, logger=None)
         clip.close()
 
-        # 2. Whisper ouve PT-BR
         log("2/5 Whisper ouvindo PT-BR...")
         model = whisper.load_model("base")
         result = model.transcribe(temp_wav, language="pt", fp16=False)
@@ -48,7 +88,6 @@ def dublar_pt_para_es_automatico(video_path_pt):
             log("Não ouviu nada, usando video original")
             return video_path_pt, ""
 
-        # 3. Traduz PT -> ES
         log("3/5 Traduzindo PT-BR -> ES...")
         try:
             url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(texto_pt)}&langpair=pt|es"
@@ -59,22 +98,19 @@ def dublar_pt_para_es_automatico(video_path_pt):
             log(f"Erro tradução {e}")
             texto_es = texto_pt
 
-        # 4. Gerar voz ES (Mexicana = perfeito pra fc_construye)
-        log("4/5 Gerando voz ES com gTTS...")
-        tts = gTTS(text=texto_es, lang='es', tld='com.mx', slow=False)
-        tts.save(temp_mp3_es)
+        # MELHORIA: agora não dá mais erro de ElevenLabs
+        if not gerar_voz_es_com_fallback(texto_es, temp_mp3_es):
+            return video_path_pt, ""
 
-        # 5. Dublagem - troca audio PT por ES
         log("5/5 Dublando video PT -> ES...")
         video = VideoFileClip(video_path_pt)
+        from moviepy.editor import AudioFileClip
         audio_es = AudioFileClip(temp_mp3_es)
-        # Loop ou corte pra bater com video se precisar
         video_final = video.set_audio(audio_es)
         video_final.write_videofile(video_saida_es, codec='libx264', audio_codec='aac', logger=None)
         video.close()
         video_final.close()
 
-        # Limpa temp
         for f in [temp_wav, temp_mp3_es]:
             if os.path.exists(f): os.remove(f)
 
@@ -88,9 +124,11 @@ def dublar_pt_para_es_automatico(video_path_pt):
         log(f"Erro pipeline auto {e}")
         return video_path_pt, ""
 
-# ====== POSTAGENS 5 REDES ======
+# ====== POSTAGENS 5 REDES - MANTIDO IGUAL + MELHORADO FB ======
 def postar_facebook(video_path, legenda):
-    if not PAGE_ID or not PAGE_TOKEN: return False
+    if not PAGE_ID or not PAGE_TOKEN:
+        log("FB FALHOU: PAGE_ID ou PAGE_TOKEN vazio - verifique secrets FB_PAGE_ID/FB_PAGE_TOKEN")
+        return False
     try:
         page_id = str(PAGE_ID).strip().replace("@","")
         url = f"https://graph.facebook.com/v20.0/{page_id}/videos"
@@ -135,17 +173,14 @@ def main():
         log(f"Sem videos em {pasta}")
         return
 
-    # CORREÇÃO DO SEU PRINT: pega original PT, mas se só tiver ES, usa ES mesmo pra não quebrar
     originais_pt = [f for f in todos if "_ES" not in f and "DUBLADO" not in f]
     
     if originais_pt:
         escolhido = random.choice(originais_pt)
         v_path_pt = os.path.join(pasta, escolhido)
         log(f"Video PT-BR original escolhido: {v_path_pt}")
-        # AQUI FAZ A TRADUÇÃO AUTOMATICA QUE VOCÊ QUER
         v_final_es, texto_es = dublar_pt_para_es_automatico(v_path_pt)
     else:
-        # Tudo já é ES - só posta direto
         escolhido = random.choice(todos)
         v_final_es = os.path.join(pasta, escolhido)
         texto_es = ""
