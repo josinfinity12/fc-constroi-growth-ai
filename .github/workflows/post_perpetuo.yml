@@ -2,29 +2,24 @@ name: post_perpetuo
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 10 * * *'  # 07h BRT
-    - cron: '0 15 * * *'  # 12h BRT
-    - cron: '0 22 * * *'  # 19h BRT
-
+    - cron: '0 10 * * *'
+    - cron: '0 15 * * *'
+    - cron: '0 22 * * *'
 jobs:
   post_perpetuo:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-          
       - name: Instala deps viral
         run: |
           sudo apt-get update -y
           sudo apt-get install -y ffmpeg imagemagick --no-install-recommends
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
-          python -m pip install --upgrade pip
           pip install requests gtts moviepy==1.0.3 openai-whisper instaloader
-          
       - name: Roda bot viral 5 redes
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
@@ -34,22 +29,16 @@ jobs:
           PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
           INSTAGRAM_USER: ${{ secrets.INSTAGRAM_USER }}
           INSTAGRAM_PASS: ${{ secrets.INSTAGRAM_PASS }}
-          INSTAGRAM_ID: ${{ secrets.INSTAGRAM_ID }}
-          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          KWAI_ACCESS_TOKEN: ${{ secrets.KWAI_ACCESS_TOKEN }}
         run: |
-          echo "=== LISTA videos/ ANTES ==="
-          ls -lh videos/ 2>&1 || echo "pasta videos vazia"
-          echo "=== RODANDO BOT COM LOGS COMPLETOS ==="
-          python auto_post_perpetuo.py 2>&1
-          echo "=== LISTA videos/ DEPOIS ==="
-          ls -lh videos/ 2>&1
-          echo "=== LOG_POSTAGENS ==="
-          cat log_postagens.json 2>&1 || echo "sem log"
-          echo "=== RANKING VIRAL ==="
-          cat ranking_viral.json 2>&1 || echo "sem ranking"
-          
+          mkdir -p videos
+          echo "=== ANTES ==="
+          ls -lh videos/ || true
+          echo "=== BOT ==="
+          python auto_post_perpetuo.py 2>&1 || true
+          echo "=== DEPOIS ==="
+          ls -lh videos/ || true
+          cat log_postagens.json || echo "sem log"
+          cat ranking_viral.json || echo "sem ranking"
       - name: Salva log viral
         if: always()
         run: |
@@ -57,5 +46,5 @@ jobs:
           git config --global user.email "bot@fc.com"
           touch log_postagens.json ranking_viral.json
           git add log_postagens.json ranking_viral.json || true
-          git diff --staged --quiet || git commit -m "viral post $(date)"
+          git diff --staged --quiet || git commit -m "viral post $(date)" || true
           git push || true
