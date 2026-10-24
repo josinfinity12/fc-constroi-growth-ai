@@ -1,6 +1,7 @@
-# auto_post_perpetuo.py v5.2 FIX - CRIA E POSTA AUTOMATICO NA PAGINA 61595702674802
+# auto_post_perpetuo.py v5.3 - VOZ ELEVENLABS + POST AUTO PAGINA 61595702674802
 import os, subprocess, json, random, datetime, requests
 from pathlib import Path
+import time
 
 OUTPUT_DIR = "/tmp/fc_perpetuo"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -8,10 +9,66 @@ os.makedirs("videos_es_final", exist_ok=True)
 
 PAGE_ID = os.getenv("PAGE_ID", "61595702674802")
 PAGE_TOKEN = os.getenv("PAGE_TOKEN", "")
+ELEVENLABS_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM") # Adam espanhol, troque pela sua voz clonada
 LOG_FILE = "log_postagens.json"
 
 def log(msg):
     print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+def gerar_audio_elevenlabs(texto_es, reel_id):
+    """GERA VOZ COM ELEVENLABS TRADUZIDA"""
+    audio_path = f"{OUTPUT_DIR}/{reel_id}_es.mp3"
+    
+    if not ELEVENLABS_KEY:
+        log("⚠️ ELEVENLABS_API_KEY vazio, usando gTTS fallback")
+        try:
+            from gtts import gTTS
+            gTTS(text=texto_es, lang='es').save(audio_path)
+            return audio_path
+        except as e:
+            log(f"gTTS erro: {e}")
+            return None
+
+    # ElevenLabs API v2
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE}"
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": ELEVENLABS_KEY
+    }
+    data = {
+        "text": texto_es,
+        "model_id": "eleven_multilingual_v2", # modelo que fala espanhol perfeito
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0.4,
+            "use_speaker_boost": True
+        }
+    }
+    
+    try:
+        log(f"🎤 Gerando voz ElevenLabs: {texto_es[:50]}...")
+        r = requests.post(url, json=data, headers=headers, timeout=30)
+        if r.status_code == 200:
+            with open(audio_path, 'wb') as f:
+                f.write(r.content)
+            log(f"✅ Audio ElevenLabs gerado: {audio_path} ({len(r.content)} bytes)")
+            return audio_path
+        else:
+            log(f"❌ ElevenLabs erro {r.status_code}: {r.text[:500]} - usando gTTS")
+            from gtts import gTTS
+            gTTS(text=texto_es, lang='es').save(audio_path)
+            return audio_path
+    except Exception as e:
+        log(f"Exception ElevenLabs: {e} - fallback gTTS")
+        try:
+            from gtts import gTTS
+            gTTS(text=texto_es, lang='es').save(audio_path)
+            return audio_path
+        except:
+            return None
 
 def puxar_3_reels_reais():
     reels = []
@@ -31,103 +88,74 @@ def puxar_3_reels_reais():
     return reels[:3]
 
 def gerar_es(titulo_pt):
-    if "gaveta" in titulo_pt.lower(): return "¿GAVETA PORCELANATO SE ROMPIÓ? Evita pérdida de $8000"
-    if "nivel" in titulo_pt.lower() or "parede" in titulo_pt.lower(): return "¿PARED DESNIVELADA? 100% nivelada sin burbuja"
-    return "¿JUNTA MANCHADA? Junta que NO se mancha 10 años"
+    if "gaveta" in titulo_pt.lower(): return "¿GAVETA PORCELANATO SE ROMPIÓ? Evita pérdida de ocho mil dólares con este truco profesional que los maestros no quieren que sepas."
+    if "nivel" in titulo_pt.lower() or "parede" in titulo_pt.lower(): return "¿PARED DESNIVELADA? Te muestro como dejarla cien por ciento nivelada sin usar burbuja. Truco de obra."
+    return "¿JUNTA MANCHADA? Te revelo la junta que no se mancha por diez años. Secreto de Fc Construye."
 
 def montar_final_9x16(reel_id, titulo_es):
     final_path = f"videos_es_final/{reel_id}_FINAL_ES_9x16.mp4"
     try:
-        from moviepy.editor import ColorClip, TextClip, CompositeVideoClip
-        from gtts import gTTS
-        audio_path = f"{OUTPUT_DIR}/{reel_id}_es.mp3"
-        gTTS(text=titulo_es, lang='es').save(audio_path)
-        clip = ColorClip(size=(1080,1920), color=(15,15,15), duration=8)
-        txt = TextClip(titulo_es, fontsize=55, color='white', bg_color='black', size=(900,400), method='caption').set_duration(8).set_position('center')
+        from moviepy.editor import ColorClip, TextClip, CompositeVideoClip, AudioFileClip
+        
+        audio_path = gerar_audio_elevenlabs(titulo_es, reel_id)
+        
+        clip = ColorClip(size=(1080,1920), color=(15,15,15), duration=10)
+        txt = TextClip(titulo_es, fontsize=55, color='white', bg_color='black', size=(900,500), method='caption').set_duration(10).set_position('center')
         final = CompositeVideoClip([clip, txt])
-        from moviepy.editor import AudioFileClip
-        if os.path.exists(audio_path):
-            final = final.set_audio(AudioFileClip(audio_path))
+        
+        if audio_path and os.path.exists(audio_path):
+            audio = AudioFileClip(audio_path)
+            # Ajusta video pra duracao do audio
+            final = final.set_duration(max(8, audio.duration + 1))
+            txt = txt.set_duration(final.duration)
+            final = CompositeVideoClip([clip, txt]).set_audio(audio)
+        
         final.write_videofile(final_path, fps=24, codec="libx264", audio_codec="aac", logger=None)
         final.close()
-        log(f"✅ {final_path}")
+        log(f"✅ Video final com voz ElevenLabs: {final_path}")
     except Exception as e:
         log(f"Erro montar: {e}")
         Path(final_path).touch()
     return final_path
 
 def postar_na_pagina_61595702674802(video_path, legenda):
-    """POSTA AUTOMATICO NA FC CONSTRUYE"""
     if not PAGE_TOKEN:
-        log("❌ ERRO: PAGE_TOKEN vazio! Vai em Settings > Secrets > PAGE_TOKEN")
+        log("❌ PAGE_TOKEN vazio")
         return False
-    
-    if not os.path.exists(video_path):
-        log(f"Video nao existe: {video_path}")
-        return False
-    
-    size = os.path.getsize(video_path)
+    size = os.path.getsize(video_path) if os.path.exists(video_path) else 0
     log(f"Postando {video_path} ({size} bytes) na pagina {PAGE_ID}")
 
-    # Se video placeholder < 10KB, posta como texto
     if size < 10000:
         url = f"https://graph.facebook.com/v20.0/{PAGE_ID}/feed"
         r = requests.post(url, data={"message": legenda, "access_token": PAGE_TOKEN}, timeout=30)
-        log(f"FB FEED {r.status_code}: {r.text[:500]}")
+        log(f"FB FEED {r.status_code}: {r.text[:300]}")
         return r.status_code == 200
 
-    # Video real
     url = f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos"
     try:
         with open(video_path, 'rb') as f:
-            files = {'source': f}
-            data = {'description': legenda, 'access_token': PAGE_TOKEN}
-            r = requests.post(url, files=files, data=data, timeout=180)
-            log(f"FB VIDEO {r.status_code}: {r.text[:800]}")
-            if r.status_code == 200:
-                log(f"✅ VIDEO POSTADO NA PAGINA 61595702674802! ID {r.json().get('id')}")
-                return True
-            else:
-                # fallback
-                url2 = f"https://graph.facebook.com/v20.0/{PAGE_ID}/feed"
-                r2 = requests.post(url2, data={"message": legenda, "access_token": PAGE_TOKEN}, timeout=30)
-                log(f"Fallback FEED {r2.status_code}: {r2.text[:500]}")
-                return r2.status_code == 200
+            r = requests.post(url, files={'source': f}, data={'description': legenda, 'access_token': PAGE_TOKEN}, timeout=180)
+            log(f"FB VIDEO {r.status_code}: {r.text[:500]}")
+            return r.status_code == 200
     except Exception as e:
-        log(f"Exception postar: {e}")
+        log(f"Erro postar: {e}")
         return False
 
 def main():
-    log(f"🚀 INICIANDO {datetime.datetime.now()}")
-    log(f"PAGE_ID {PAGE_ID} | TOKEN {'OK' if PAGE_TOKEN else 'VAZIO'}")
-    
-    db = {"total_posts": 0}
-    if os.path.exists(LOG_FILE):
-        try:
-            with open(LOG_FILE, "r") as f: db = json.load(f)
-        except: pass
+    log(f"🚀 INICIANDO v5.3 ELEVENLABS {datetime.datetime.now()}")
+    log(f"ElevenLabs Key: {'OK '+ELEVENLABS_KEY[:10]+'...' if ELEVENLABS_KEY else 'VAZIO'}")
+    log(f"Voice ID: {ELEVENLABS_VOICE}")
 
     for reel in puxar_3_reels_reais():
         titulo_es = gerar_es(reel['title'])
-        legenda = f"{titulo_es}\n\nComenta YO QUIERO\n\n#construccion #fc_construye\n📲 Fc Construye - El Salvador - {datetime.datetime.now().strftime('%d/%m/%Y')}"
+        legenda = f"{titulo_es}\n\nComenta YO QUIERO\n\n#construccion #fc_construye"
         video_path = montar_final_9x16(reel['id'], titulo_es)
         log(f"Legenda: {legenda}")
-
-        # AQUI POSTA AUTOMATICO
         ok = postar_na_pagina_61595702674802(video_path, legenda)
-        if ok:
-            log("✅ POSTADO COM SUCESSO NA FC CONSTRUYE")
-            db["total_posts"] = db.get("total_posts", 0) + 1
-        else:
-            log("❌ Falha ao postar")
-        
-        time.sleep(3) # pausa entre posts
+        log(f"{'✅ POSTADO' if ok else '❌ FALHA'} NA FC CONSTRUYE - Voz ElevenLabs")
+        time.sleep(5)
 
-    with open(LOG_FILE, "w", encoding="utf-8") as f:
-        json.dump(db, f, indent=2, ensure_ascii=False)
-    
-    log("🎉 FIM CICLO - 5 plataformas ES estrutura pronta")
+    log("🎉 FIM CICLO v5.3 ELEVENLABS")
 
 if __name__ == "__main__":
-    import time
     main()
