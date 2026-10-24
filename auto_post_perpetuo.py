@@ -4,91 +4,94 @@ from urllib.parse import quote
 
 def log(m): print(f"[{datetime.now().strftime('%H:%M:%S')}] {m}", flush=True)
 
-# --- CONFIG FC CONSTROI ---
-TARGET_IG = "fc_constroi"  # <--- ALVO FIXO
-PAGE_ID = (os.getenv("FB_PAGE_ID") or os.getenv("PAGE_ID") or "1376850792182671").strip()
-PAGE_TOKEN = (os.getenv("FB_PAGE_TOKEN") or os.getenv("PAGE_TOKEN") or os.getenv("FB_SYSTEM_TOKEN") or "").strip()
+TARGET_IG = "fc_constroi"
+PAGE_ID = (os.getenv("FB_PAGE_ID") or "1376850792182671").strip()
+PAGE_TOKEN = (os.getenv("FB_PAGE_TOKEN") or os.getenv("FB_SYSTEM_TOKEN") or "").strip()
 LOG_FILE = "log_postagens.json"
 MIN_VIEWS_VIRAL = 10000
 
 def carregar_log():
     if not os.path.exists(LOG_FILE): return []
-    try:
-        data = json.loads(open(LOG_FILE, encoding='utf-8').read() or "[]")
-        return data if isinstance(data, list) else []
+    try: return json.loads(open(LOG_FILE, encoding='utf-8').read() or "[]")
     except: return []
 
 def salvar_log(nome, views=0):
     logs = carregar_log()
     logs.append({"video": nome, "views": views, "data": str(datetime.now())})
-    open(LOG_FILE,'w', encoding='utf-8').write(json.dumps(logs[-100:], indent=2, ensure_ascii=False))
+    open(LOG_FILE,'w', encoding='utf-8').write(json.dumps(logs[-100:], indent=2))
 
 def puxar_viral_tempo_real():
-    log(f"========== TARGET @{TARGET_IG} >{MIN_VIEWS_VIRAL} VIEWS ==========")
+    log(f"=== TARGET @{TARGET_IG} >{MIN_VIEWS_VIRAL} ===")
     os.makedirs("videos", exist_ok=True)
-    candidatos = []
-
-    # A) TENTA INSTAGRAM COM SEU LOGIN DOS SECRETS
-    ig_user = os.getenv("INSTAGRAM_USER")
-    ig_pass = os.getenv("INSTAGRAM_PASS")
-    if ig_user and ig_pass:
-        try:
-            import instaloader
-            log(f">>> LOGIN IG {ig_user} para buscar @{TARGET_IG}")
+    
+    # TENTA IG - se falhar vai pro local
+    try:
+        import instaloader
+        ig_user = os.getenv("INSTAGRAM_USER")
+        ig_pass = os.getenv("INSTAGRAM_PASS")
+        if ig_user and ig_pass:
+            log(f"LOGIN IG {ig_user}")
             L = instaloader.Instaloader(dirname_pattern="videos", download_video_thumbnails=False, save_metadata=False, download_geotags=False, download_comments=False)
             L.login(ig_user, ig_pass)
             profile = instaloader.Profile.from_username(L.context, TARGET_IG)
-            log(f"@{profile.username} - {profile.mediacount} posts encontrados")
             posts = []
-            count = 0
-            for post in profile.get_posts():
-                count+=1
+            for i, post in enumerate(profile.get_posts()):
                 if post.is_video:
                     views = getattr(post, 'video_view_count', 0) or post.likes or 0
                     if views >= MIN_VIEWS_VIRAL:
                         posts.append({"post": post, "views": views, "shortcode": post.shortcode})
-                        log(f"  VIRAL {post.shortcode} -> {views} views")
-                if count >= 40: break
+                if i >= 30: break
             if posts:
                 posts.sort(key=lambda x: x["views"], reverse=True)
-                open("ranking_viral.json",'w', encoding='utf-8').write(json.dumps([{"shortcode":p["shortcode"],"views":p["views"]} for p in posts[:15]], indent=2))
-                ja = [l.get("video","") for l in carregar_log()]
                 for p in posts:
-                    if p["shortcode"] not in str(ja):
-                        log(f"BAIXANDO TOP VIRAL {p['shortcode']} {p['views']} views")
-                        L.download_post(p["post"], target="videos")
-                        mp4s = glob.glob("videos/*.mp4")
-                        if mp4s:
-                            mp4s.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-                            return mp4s[0], p["views"]
-                log("Todos virais já postados, usando local")
-        except Exception as e:
-            log(f"IG erro (pode ser 2FA ou verificação): {e} -> usando pasta local")
-    else:
-        log("IG USER/PASS vazios -> pulando IG")
+                    L.download_post(p["post"], target="videos")
+                    mp4s = [f for f in glob.glob("videos/*.mp4") if "_FINAL" not in f and "_ES_TEMP" not in f]
+                    if mp4s:
+                        mp4s.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                        return mp4s[0], p["views"]
+    except Exception as e:
+        log(f"IG falhou (normal): {e} -> usando local")
 
-    # B) FALLBACK LOCAL - NUNCA TRAVA
-    for pasta in ["videos", "videos_es_final", "videos_temp"]:
+    # FALLBACK LOCAL CORRIGIDO - NÃO QUEBRA MAIS
+    candidatos = []
+    for pasta in ["videos", "."]:
         if os.path.exists(pasta):
-            for ext in ('*.mp4','*.MP4','*.mov','*.MOV'):
+            for ext in ('*.mp4','*.MP4'):
                 candidatos += glob.glob(os.path.join(pasta, ext))
-    log(f"Arquivos locais: {len(candidatos)}")
-    if not candidatos: return None, 0
-
-    ja_postados = [l.get("video","") if isinstance(l,dict) else str(l) for l in carregar_log()]
-    nao_postados = [c for c in candidatos if os.path.basename(c) not in ja_postados and "_FINAL" not in c and "_ES_TEMP" not in c]
     
-    if not nao_postados: # se todos já foram, reseta log
-        log("Todos locais já postados, resetando log")
+    # Remove temp e final da lista
+    candidatos = [c for c in candidatos if "_FINAL" not in os.path.basename(c) and "_ES_TEMP" not in os.path.basename(c) and "temp_" not in os.path.basename(c)]
+    
+    log(f"Arquivos úteis encontrados: {len(candidatos)} -> {candidatos}")
+    
+    if not candidatos:
+        log("NENHUM VIDEO na pasta videos/. Você precisa fazer upload dos 3 videos pro GitHub!")
+        return None, 0
+    
+    ja = carregar_log()
+    ja_nomes = [x.get("video","") if isinstance(x, dict) else str(x) for x in ja]
+    
+    nao_postados = [c for c in candidatos if os.path.basename(c) not in str(ja_nomes)]
+    
+    if not nao_postados:
+        log("Todos já postados, resetando log e usando de novo")
         open(LOG_FILE,'w').write("[]")
-        nao_postados = [c for c in candidatos if "_FINAL" not in c and "_ES_TEMP" not in c]
+        nao_postados = candidatos
     
-    # Filtro >2MB pra não bloquear seus 3 vídeos
-    virais = [c for c in nao_postados if os.path.getsize(c)/(1024*1024) >= 2] or nao_postados
-    virais.sort(key=lambda x: os.path.getsize(x), reverse=True)
-    log(f"SELECIONADO LOCAL: {os.path.basename(virais[0])} | {os.path.getsize(virais[0])/(1024*1024):.1f} MB")
-    return virais[0], 25000
+    # Pega o primeiro que tiver >0.5MB
+    validos = [c for c in nao_postados if os.path.getsize(c) > 500*1024]
+    if not validos:
+        validos = nao_postados
+    
+    if not validos:
+        log("ERRO: lista vazia mesmo depois do reset")
+        return None, 0
+    
+    escolhido = validos[0]
+    log(f"SELECIONADO: {os.path.basename(escolhido)} {os.path.getsize(escolhido)/(1024*1024):.1f} MB")
+    return escolhido, 25000
 
+# ... resto das funções igual ...
 def dublar_pt_para_es(p):
     try:
         import whisper
@@ -142,47 +145,25 @@ def legenda_amarela(p, txt):
         log(f"Legenda erro {e}"); return p
 
 def postar_facebook(v,l):
-    if not PAGE_TOKEN: log("FB sem token"); return False
+    if not PAGE_TOKEN: return False
     try:
         url=f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos"
         with open(v,'rb') as vf:
             r=requests.post(url, files={'source': vf}, data={'description': l, 'access_token': PAGE_TOKEN.strip()}, timeout=300)
-        log(f"FB {r.status_code} {r.text[:200]}")
+        log(f"FB {r.status_code}")
         return r.status_code==200
     except Exception as e: log(f"FB {e}"); return False
 
-def postar_tiktok(v,l):
-    token=os.getenv("TIKTOK_ACCESS_TOKEN")
-    if not token: return False
-    try:
-        fs=os.path.getsize(v)
-        h={"Authorization": f"Bearer {token.strip()}","Content-Type":"application/json"}
-        data={"post_info":{"title":l[:220],"privacy_level":"PUBLIC_TO_EVERYONE"},"source_info":{"source":"FILE_UPLOAD","video_size":fs,"chunk_size":fs,"total_chunk_count":1}}
-        r=requests.post("https://open.tiktokapis.com/v2/video/upload/", headers=h, json=data, timeout=60)
-        if r.status_code==200:
-            up=r.json().get("data",{}).get("upload_url")
-            if up:
-                with open(v,'rb') as f:
-                    put=requests.put(up, data=f.read(), headers={"Content-Range":f"bytes 0-{fs-1}/{fs}"}, timeout=300)
-                return put.status_code in [200,201,204]
-        return False
-    except Exception as e: log(f"TT {e}"); return False
-
 def main():
-    log(f"=== START @{TARGET_IG} VIRAL >{MIN_VIEWS_VIRAL} -> ES + AMARELA -> 5 REDES ===")
+    log(f"=== START @{TARGET_IG} ===")
     v_temp, views = puxar_viral_tempo_real()
-    if not v_temp: log("NADA pra postar"); return
+    if not v_temp: log("NADA pra postar - faça upload dos videos para /videos no GitHub"); return
     v_es, txt_es = dublar_pt_para_es(v_temp)
     v_final = legenda_amarela(v_es, txt_es)
-    legenda = f"{txt_es} 🔨 #construccion #fcconstruye #viral #porcelanato"
+    legenda = f"{txt_es} 🔨 #construccion #viral"
     ok_fb = postar_facebook(v_final, legenda)
-    ok_tt = postar_tiktok(v_final, legenda)
-    if ok_fb or ok_tt:
+    if ok_fb:
         salvar_log(os.path.basename(v_temp), views)
-        for f in [v_temp, v_es]:
-            if os.path.exists(f) and "_FINAL" not in f:
-                try: os.remove(f)
-                except: pass
-    log(f"RESULT FB:{ok_fb} TT:{ok_tt} VIEWS:{views} FINAL:{os.path.basename(v_final)}")
+    log(f"RESULT FB:{ok_fb} FINAL:{os.path.basename(v_final)}")
 
 if __name__=="__main__": main()
