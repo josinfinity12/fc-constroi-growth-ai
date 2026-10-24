@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -24,6 +25,15 @@ jobs:
           rm -rf fc-constroi-growth-ai 2>/dev/null || true
           rm -rf .git/modules/fc-constroi-growth-ai 2>/dev/null || true
 
+      - name: Instala ImageMagick e FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick ffmpeg
+          sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/g' /etc/ImageMagick-6/policy.xml || true
+          convert --version
+          ffmpeg -version
+          echo "ImageMagick e FFmpeg OK"
+
       - name: Setup Python 3.11
         uses: actions/setup-python@v4
         with:
@@ -32,7 +42,8 @@ jobs:
       - name: Instala dependencias
         run: |
           pip install -r requirements.txt
-          pip install requests
+          pip install requests moviepy
+          pip install --upgrade imageio-ffmpeg
 
       - name: Cria arquivos se não existem
         run: |
@@ -45,13 +56,13 @@ jobs:
           PAGE_TOKEN: ${{ secrets.PAGE_TOKEN }}
           APP_ID: '1932783614771356'
           APP_SECRET: ${{ secrets.APP_SECRET }}
+          IMAGEMAGICK_BINARY: /usr/bin/convert
         run: |
-          python auto_post_perpetuo.py || python bot_perpetuo.py || python main.py
+          python auto_post_perpetuo.py
 
       - name: Salva progresso automatico
         run: |
           git config user.email "bot@fcconstruye.com"
-          
           git config user.name "Bot Francis Construye ES"
           git add -A
           git add -f log_postagens.json 2>/dev/null || true
