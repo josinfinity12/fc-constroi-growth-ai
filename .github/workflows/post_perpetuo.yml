@@ -2,7 +2,7 @@ name: post_perpetuo_es_5_plataformas
 
 on:
   schedule:
-    - cron: '0 12 * * *' # 12h UTC = 9h Brasil - posta todo dia sozinho
+    - cron: '0 12 * * *'
   workflow_dispatch:
 
 jobs:
@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -24,7 +23,6 @@ jobs:
           git rm --cached fc-constroi-growth-ai 2>/dev/null || true
           rm -rf fc-constroi-growth-ai 2>/dev/null || true
           rm -rf .git/modules/fc-constroi-growth-ai 2>/dev/null || true
-          echo "limpo"
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v4
@@ -33,15 +31,13 @@ jobs:
 
       - name: Instala dependencias
         run: |
-          pip install requests python-dotenv
+          pip install -r requirements.txt
+          pip install requests
 
       - name: Cria arquivos se não existem
         run: |
-          if [ ! -f log_postagens.json ]; then
-            echo '{"videos_es":[],"ultimo_post":"","total_posts":0}' > log_postagens.json
-          fi
+          [ -f log_postagens.json ] || echo '{"videos_es":[],"ultimo_post":"","total_posts":0}' > log_postagens.json
           mkdir -p videos_es_final
-          ls -la
 
       - name: Roda bot Francis Construye - 5 plataformas ES
         env:
@@ -49,19 +45,14 @@ jobs:
           PAGE_TOKEN: ${{ secrets.PAGE_TOKEN }}
           APP_ID: '1932783614771356'
           APP_SECRET: ${{ secrets.APP_SECRET }}
-          LINGUA: 'es'
         run: |
-          python main.py || python bot.py || python app.py || echo "nenhum main.py encontrado"
+          python auto_post_perpetuo.py || python bot_perpetuo.py || python main.py
 
       - name: Salva progresso automatico
         run: |
           git config user.email "bot@fcconstruye.com"
+          
           git config user.name "Bot Francis Construye ES"
           git add -A
-          git add -f log_postagens.json videos_es_final/ 2>/dev/null || true
-          if ! git diff --staged --quiet; then
-            git commit -m "🤖 post perpetuo es - $(date -u +%Y-%m-%d)"
-            git push
-          else
-            echo "nada para salvar"
-          fi
+          git add -f log_postagens.json 2>/dev/null || true
+          git diff --staged --quiet || (git commit -m "post es $(date -u)" && git push)
