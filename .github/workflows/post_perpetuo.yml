@@ -1,99 +1,43 @@
-import os
-import json
-import random
-import requests
-from datetime import datetime
+name: post_perpetuo
 
-def log(msg):
-    print(f"[{datetime.now()}] {msg}", flush=True)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * *'
 
-# Verifica chaves
-PAGE_ID = os.getenv("PAGE_ID")
-PAGE_TOKEN = os.getenv("PAGE_TOKEN")
-ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY")
-ELEVEN_VOICE = os.getenv("ELEVENLABS_VOICE_ID") or "21m00Tcm4TlvDq8ikWAM"
+jobs:
+  post_perpetuo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-log(f"PAGE_ID: {'OK' if PAGE_ID else 'VAZIO'} {PAGE_ID}")
-log(f"ElevenLabs Key: {'OK ' + ELEVEN_KEY[:12] if ELEVEN_KEY else 'VAZIO'}...")
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-def gerar_voz_elevenlabs(texto, output_path="voz.mp3"):
-    """Gera voz em espanhol com ElevenLabs"""
-    if not ELEVEN_KEY:
-        log("ElevenLabs sem chave, usando gTTS fallback")
-        return None
-    try:
-        from elevenlabs.client import ElevenLabs
-        client = ElevenLabs(api_key=ELEVEN_KEY)
-        log(f"Gerando voz ElevenLabs: {texto[:80]}...")
-        audio = client.text_to_speech.convert(
-            voice_id=ELEVEN_VOICE,
-            model_id="eleven_multilingual_v2",
-            text=texto
-        )
-        with open(output_path, "wb") as f:
-            for chunk in audio:
-                f.write(chunk)
-        size = os.path.getsize(output_path)
-        log(f"Audio ElevenLabs OK: {size} bytes")
-        return output_path
-    except Exception as e:
-        log(f"Erro ElevenLabs: {e}")
-        return None
+      - name: Instala deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests elevenlabs moviepy==1.0.3
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg imagemagick
+          sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
 
-def postar_na_pagina(video_path, legenda):
-    if not PAGE_ID or not PAGE_TOKEN:
-        log("ERRO: PAGE_ID ou PAGE_TOKEN vazio nos Secrets")
-        return False
-    try:
-        url = f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos"
-        log(f"Postando em {PAGE_ID}...")
-        with open(video_path, 'rb') as video_file:
-            files = {'source': video_file}
-            data = {'description': legenda, 'access_token': PAGE_TOKEN}
-            r = requests.post(url, files=files, data=data, timeout=120)
-        log(f"Facebook response {r.status_code}: {r.text[:800]}")
-        return r.status_code == 200
-    except Exception as e:
-        log(f"Exception postar: {e}")
-        return False
+      - name: Roda bot
+        env:
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+          PAGE_TOKEN: ${{ secrets.PAGE_TOKEN }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+        run: |
+          python auto_post_perpetuo.py
 
-def main():
-    log("=== INICIO post_perpetuo FC CONSTRUYE ===")
-    
-    # Lista de videos - adapta pro seu path
-    pasta = "videos_es_final"
-    if not os.path.exists(pasta):
-        pasta = "videos"
-    if not os.path.exists(pasta):
-        os.makedirs(pasta, exist_ok=True)
-        log(f"Pasta {pasta} vazia, criando video teste")
-        # cria arquivo de log se nao existe
-        with open("log_postagens.json", "w") as f:
-            json.dump({"ultimo_post": str(datetime.now()), "total_posts": 0}, f)
-        return
-
-    arquivos = [f for f in os.listdir(pasta) if f.endswith(('.mp4', '.mov'))]
-    if not arquivos:
-        log(f"Nenhum video em {pasta}")
-        return
-    
-    video_escolhido = random.choice(arquivos)
-    video_path = os.path.join(pasta, video_escolhido)
-    log(f"Video escolhido: {video_path}")
-
-    legenda = "🔨 Francis Construye - Tip de construcción del día! ¿Sabías esto? #construccion #albañileria #tips"
-
-    # Tenta gerar voz (opcional, nao bloqueia)
-    try:
-        gerar_voz_elevenlabs("¿Sabias que este truco de albañileria te ahorra dinero? Mira esto!", "voz_temp.mp3")
-    except Exception as e:
-        log(f"Falha voz mas continua: {e}")
-
-    ok = postar_na_pagina(video_path, legenda)
-    if ok:
-        log("✅ POSTADO NA FC CONSTRUYE")
-    else:
-        log("❌ Falha ao postar")
-
-if __name__ == "__main__":
-    main()
+      - name: Salva log
+        run: |
+          git config --global user.name "bot-fc"
+          git config --global user.email "bot@fc.com"
+          git add log_postagens.json || true
+          git diff --staged --quiet || git commit -m "log post"
+          git push || true
