@@ -24,4 +24,5 @@ moviepy==1.0.3
 yt-dlp
 elevenlabs
 gtts
-
+openai-whisper
+moviepy
