@@ -1,69 +1,141 @@
-name: post_perpetuo_es_5_plataformas
+# auto_post_perpetuo.py v5.4 FIX SyntaxError + ELEVENLABS + POST AUTO
+import os, subprocess, json, random, datetime, requests
+from pathlib import Path
+import time
 
-on:
-  schedule:
-    - cron: '0 12 * * *'
-  workflow_dispatch:
+OUTPUT_DIR = "/tmp/fc_perpetuo"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs("videos_es_final", exist_ok=True)
 
-jobs:
-  post_perpetuo:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+PAGE_ID = os.getenv("PAGE_ID", "61595702674802")
+PAGE_TOKEN = os.getenv("PAGE_TOKEN", "")
+ELEVENLABS_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+LOG_FILE = "log_postagens.json"
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
+def log(msg):
+    print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
-      - name: Limpa erro fc-constroi-growth-ai
-        run: |
-          rm -f .gitmodules
-          git rm --cached fc-constroi-growth-ai 2>/dev/null || true
-          rm -rf fc-constroi-growth-ai 2>/dev/null || true
-          rm -rf .git/modules/fc-constroi-growth-ai 2>/dev/null || true
+def gerar_audio_elevenlabs(texto_es, reel_id):
+    audio_path = f"{OUTPUT_DIR}/{reel_id}_es.mp3"
+    if not ELEVENLABS_KEY:
+        log("ElevenLabs vazio, usando gTTS")
+        try:
+            from gtts import gTTS
+            gTTS(text=texto_es, lang='es').save(audio_path)
+            return audio_path
+        except Exception as e:
+            log(f"gTTS erro: {e}")
+            return None
 
-      - name: Instala ImageMagick e FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick ffmpeg
-          sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/g' /etc/ImageMagick-6/policy.xml || true
-          convert --version
-          ffmpeg -version
-          echo "ImageMagick e FFmpeg OK"
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE}"
+    headers = {"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": ELEVENLABS_KEY}
+    data = {
+        "text": texto_es,
+        "model_id": "eleven_multilingual_v2",
+        "voice_settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.4, "use_speaker_boost": True}
+    }
+    try:
+        log(f"Gerando voz ElevenLabs: {texto_es[:50]}...")
+        r = requests.post(url, json=data, headers=headers, timeout=30)
+        if r.status_code == 200:
+            with open(audio_path, 'wb') as f:
+                f.write(r.content)
+            log(f"Audio ElevenLabs OK: {len(r.content)} bytes")
+            return audio_path
+        else:
+            log(f"ElevenLabs erro {r.status_code}: {r.text[:300]}")
+            from gtts import gTTS
+            gTTS(text=texto_es, lang='es').save(audio_path)
+            return audio_path
+    except Exception as e:
+        log(f"Exception ElevenLabs: {e}")
+        try:
+            from gtts import gTTS
+            gTTS(text=texto_es, lang='es').save(audio_path)
+            return audio_path
+        except Exception as e2:
+            log(f"Fallback falhou: {e2}")
+            return None
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+def puxar_3_reels_reais():
+    reels = []
+    try:
+        cmd = ["yt-dlp", "--flat-playlist", "--dump-json", "--playlist-end", "3", "https://www.instagram.com/fc_constroi/reels/"]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=40)
+        if r.stdout:
+            for line in r.stdout.strip().split("\n")[:3]:
+                try:
+                    d = json.loads(line)
+                    reels.append({"id": d.get("id", f"reel_{random.randint(1,999)}"), "title": d.get("title","Gaveta R$8mil")[:80]})
+                except:
+                    continue
+    except Exception as e:
+        log(f"yt-dlp: {e}")
+    if len(reels) < 3:
+        reels = [{"id":"gaveta_8000","title":"ERRO de R$8mil gaveta"},{"id":"nivel_parede","title":"Parede nivelada"},{"id":"rejunte_10anos","title":"Rejunte 10 anos"}]
+    return reels[:3]
 
-      - name: Instala dependencias
-        run: |
-          pip install -r requirements.txt
-          pip install requests moviepy
-          pip install --upgrade imageio-ffmpeg
+def gerar_es(titulo_pt):
+    titulo_pt = titulo_pt.lower()
+    if "gaveta" in titulo_pt: return "¿GAVETA PORCELANATO SE ROMPIO? Evita perdida de ocho mil dolares con este truco profesional."
+    if "nivel" in titulo_pt or "parede" in titulo_pt: return "¿PARED DESNIVELADA? Te muestro como dejarla cien por ciento nivelada sin burbuja."
+    return "¿JUNTA MANCHADA? Te revelo la junta que no se mancha por diez anos. Secreto de Fc Construye."
 
-      - name: Cria arquivos se não existem
-        run: |
-          [ -f log_postagens.json ] || echo '{"videos_es":[],"ultimo_post":"","total_posts":0}' > log_postagens.json
-          mkdir -p videos_es_final
+def montar_final_9x16(reel_id, titulo_es):
+    final_path = f"videos_es_final/{reel_id}_FINAL_ES_9x16.mp4"
+    try:
+        from moviepy.editor import ColorClip, TextClip, CompositeVideoClip, AudioFileClip
+        audio_path = gerar_audio_elevenlabs(titulo_es, reel_id)
+        clip = ColorClip(size=(1080,1920), color=(15,15,15), duration=10)
+        txt = TextClip(titulo_es, fontsize=55, color='white', bg_color='black', size=(900,500), method='caption').set_duration(10).set_position('center')
+        final = CompositeVideoClip([clip, txt])
+        if audio_path and os.path.exists(audio_path):
+            audio = AudioFileClip(audio_path)
+            final = final.set_duration(max(8, audio.duration + 1))
+            txt = txt.set_duration(final.duration)
+            final = CompositeVideoClip([clip, txt]).set_audio(audio)
+        final.write_videofile(final_path, fps=24, codec="libx264", audio_codec="aac", logger=None)
+        final.close()
+        log(f"Video final: {final_path}")
+    except Exception as e:
+        log(f"Erro montar: {e}")
+        Path(final_path).touch()
+    return final_path
 
-      - name: Roda bot Francis Construye - 5 plataformas ES
-        env:
-          PAGE_ID: '61595702674802'
-          PAGE_TOKEN: ${{ secrets.PAGE_TOKEN }}
-          APP_ID: '1932783614771356'
-          APP_SECRET: ${{ secrets.APP_SECRET }}
-          IMAGEMAGICK_BINARY: /usr/bin/convert
-        run: |
-          python auto_post_perpetuo.py
+def postar_na_pagina(video_path, legenda):
+    if not PAGE_TOKEN:
+        log("PAGE_TOKEN vazio")
+        return False
+    size = os.path.getsize(video_path) if os.path.exists(video_path) else 0
+    log(f"Postando {video_path} ({size} bytes) na pagina {PAGE_ID}")
+    if size < 10000:
+        url = f"https://graph.facebook.com/v20.0/{PAGE_ID}/feed"
+        r = requests.post(url, data={"message": legenda, "access_token": PAGE_TOKEN}, timeout=30)
+        log(f"FB FEED {r.status_code}: {r.text[:400]}")
+        return r.status_code == 200
+    url = f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos"
+    try:
+        with open(video_path, 'rb') as f:
+            r = requests.post(url, files={'source': f}, data={'description': legenda, 'access_token': PAGE_TOKEN}, timeout=180)
+            log(f"FB VIDEO {r.status_code}: {r.text[:600]}")
+            return r.status_code == 200
+    except Exception as e:
+        log(f"Erro postar: {e}")
+        return False
 
-      - name: Salva progresso automatico
-        run: |
-          git config user.email "bot@fcconstruye.com"
-          git config user.name "Bot Francis Construye ES"
-          git add -A
-          git add -f log_postagens.json 2>/dev/null || true
-          git diff --staged --quiet || (git commit -m "post es $(date -u)" && git push)
+def main():
+    log(f"INICIANDO v5.4 FIX {datetime.datetime.now()}")
+    for reel in puxar_3_reels_reais():
+        titulo_es = gerar_es(reel['title'])
+        legenda = f"{titulo_es}\n\nComenta YO QUIERO\n\n#construccion #fc_construye"
+        video_path = montar_final_9x16(reel['id'], titulo_es)
+        log(f"Legenda: {legenda}")
+        ok = postar_na_pagina(video_path, legenda)
+        log(f"{'POSTADO' if ok else 'FALHA'} NA FC CONSTRUYE - Voz ElevenLabs")
+        time.sleep(3)
+    log("FIM CICLO v5.4")
+
+if __name__ == "__main__":
+    main()
+    
