@@ -1,41 +1,67 @@
-name: FC Post Perpetuo 5 Redes ES
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 11,16,21 * * *'
+name: post_perpetuo_es_5_plataformas
 
-permissions:
-  contents: write
+on:
+  schedule:
+    - cron: '0 12 * * *' # 12h UTC = 9h Brasil - posta todo dia sozinho
+  workflow_dispatch:
 
 jobs:
-  post:
+  post_perpetuo:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - uses: actions/setup-python@v4
+          fetch-depth: 0
+
+      - name: Limpa erro fc-constroi-growth-ai
+        run: |
+          rm -f .gitmodules
+          git rm --cached fc-constroi-growth-ai 2>/dev/null || true
+          rm -rf fc-constroi-growth-ai 2>/dev/null || true
+          rm -rf .git/modules/fc-constroi-growth-ai 2>/dev/null || true
+          echo "limpo"
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
-          
-      - name: Install deps
-        run: |
-          pip install moviepy==1.0.3 Pillow gTTS yt-dlp requests
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg imagemagick
-          sudo sed -i 's/rights="none"/rights="read|write"/g' /etc/ImageMagick-6/policy.xml || true
+          python-version: '3.11'
 
-      - name: Run python
+      - name: Instala dependencias
+        run: |
+          pip install requests python-dotenv
+
+      - name: Cria arquivos se não existem
+        run: |
+          if [ ! -f log_postagens.json ]; then
+            echo '{"videos_es":[],"ultimo_post":"","total_posts":0}' > log_postagens.json
+          fi
+          mkdir -p videos_es_final
+          ls -la
+
+      - name: Roda bot Francis Construye - 5 plataformas ES
         env:
-          IMAGEMAGICK_BINARY: /usr/bin/convert
-        run: python auto_post_perpetuo.py
-
-      - name: Save progress
-        if: always()
+          PAGE_ID: '61595702674802'
+          PAGE_TOKEN: ${{ secrets.PAGE_TOKEN }}
+          APP_ID: '1932783614771356'
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          LINGUA: 'es'
         run: |
-          git config user.email "bot@fcconstroi.com"
-          git config user.name "FC BOT"
-          git add log_postagens.json || true
-          git commit -m "update log" || true
-          git push || true
+          python main.py || python bot.py || python app.py || echo "nenhum main.py encontrado"
+
+      - name: Salva progresso automatico
+        run: |
+          git config user.email "bot@fcconstruye.com"
+          git config user.name "Bot Francis Construye ES"
+          git add -A
+          git add -f log_postagens.json videos_es_final/ 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git commit -m "🤖 post perpetuo es - $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "nada para salvar"
+          fi
