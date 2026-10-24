@@ -1,28 +1,36 @@
+# --- CORE API E SERVIDOR (suas 10 abas) ---
 fastapi
 uvicorn[standard]
-supabase
+flask
+gunicorn
 python-dotenv
+supabase
+
+# --- DASHBOARD E DADOS ---
 streamlit
+streamlit-autorefresh
 pandas
 numpy
-pillow
-requests
 openpyxl
+pytz
+fpdf
+pillow
 scikit-learn
 matplotlib
 seaborn
 plotly
-openai
-google-generativeai
-streamlit-autorefresh
-pytz
-fpdf
-flask
-gunicorn
+
+# --- VIDEO E AUDIO - PT-BR -> ES AUTOMATICO (FC CONSTRUYE) ---
 imageio-ffmpeg
 moviepy==1.0.3
 yt-dlp
-elevenlabs
-gtts
 openai-whisper
-moviepy
+gTTS
+elevenlabs
+torch
+torchaudio
+
+# --- IA E APIS ---
+openai
+google-generativeai
+requests
