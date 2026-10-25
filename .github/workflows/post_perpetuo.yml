@@ -1,8 +1,6 @@
 name: post_perpetuo
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"
 jobs:
   post_perpetuo:
     runs-on: ubuntu-latest
@@ -18,35 +16,38 @@ jobs:
         run: |
           pip install requests yt-dlp -q
           python - << 'PY'
-          import os, requests, subprocess, time
-          SUPA_URL = os.getenv("SUPABASE_URL")
-          SUPA_KEY = os.getenv("SUPABASE_KEY")
-          PAGE_ID = os.getenv("PAGE_ID")
-          PAGE_TOKEN = os.getenv("PAGE_TOKEN")
-          COOKIES = os.getenv("IG_COOKIES")
-          open('/tmp/cookies.txt','w').write(COOKIES or "")
-          print("Cookie salvo")
-          headers = {"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}"}
-          r = requests.get(f"{SUPA_URL}/rest/v1/instagram_reels_reais?select=*&order=score.desc&limit=1", headers=headers, timeout=20)
-          reel = r.json()[0]
-          insta_url = reel.get('url')
-          titulo = reel.get('titulo','')
-          print(f"URL: {insta_url}")
-          # BAIXA O ARQUIVO em vez de pegar link
-          cmd = ["yt-dlp", "--cookies", "/tmp/cookies.txt", "-o", "/tmp/video.mp4", "--no-playlist", insta_url]
-          print("Baixando video...")
-          result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-          print(result.stdout[-500:])
-          print(result.stderr[-500:])
+          import os, requests, subprocess
+          SUPA_URL=os.getenv("SUPABASE_URL")
+          SUPA_KEY=os.getenv("SUPABASE_KEY")
+          PAGE_ID=os.getenv("PAGE_ID")
+          PAGE_TOKEN=os.getenv("PAGE_TOKEN")
+          COOKIES=os.getenv("IG_COOKIES","")
+          open('/tmp/cookies.txt','w').write(COOKIES)
+          print(f"Cookies tamanho: {len(COOKIES)}")
+          print(f"Cookies inicio: {COOKIES[:100]}")
+          headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}"}
+          r=requests.get(f"{SUPA_URL}/rest/v1/instagram_reels_reais?select=*&order=score.desc&limit=1", headers=headers, timeout=20)
+          reel=r.json()[0]
+          insta_url=reel.get('url')
+          titulo=reel.get('titulo','')
+          print(f"URL REAL DO BANCO: {insta_url}")
+          # Tenta baixar com timeout de 30s pra nao travar
+          try:
+              cmd=["yt-dlp","--cookies","/tmp/cookies.txt","--socket-timeout","15","--retries","1","--no-warnings","-o","/tmp/video.mp4",insta_url]
+              print(f"Rodando: {' '.join(cmd)}")
+              result=subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+              print("STDOUT:", result.stdout[-800:])
+              print("STDERR:", result.stderr[-800:])
+              print("Return code:", result.returncode)
+          except subprocess.TimeoutExpired:
+              print("⏰ TIMEOUT de 45s - yt-dlp travou, matando")
+              subprocess.run(["pkill","-9","yt-dlp"])
           if os.path.exists("/tmp/video.mp4"):
-              size = os.path.getsize("/tmp/video.mp4")
-              print(f"Video baixado: {size} bytes")
-              # Envia arquivo direto pro Facebook, nao via URL
+              print(f"OK video {os.path.getsize('/tmp/video.mp4')} bytes")
               with open("/tmp/video.mp4","rb") as f:
-                  fb = requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": titulo, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
+                  fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": titulo, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
               print(f"FACEBOOK: {fb.status_code} {fb.text[:1000]}")
-              if fb.status_code==200:
-                  print("✅ POSTOU 100% @fcconstruye !!!")
           else:
-              print("❌ Falha ao baixar, yt-dlp bloqueado")
+              print("❌ NAO BAIXOU - Verifica se a URL no Supabase esta completa")
+              print(f"A url atual '{insta_url}' parece invalida, deveria ser tipo https://www.instagram.com/reel/DJxxx/")
           PY
