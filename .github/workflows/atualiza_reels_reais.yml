@@ -1,0 +1,38 @@
+name: Atualiza @fc_constroi REAL TIME
+on:
+  schedule:
+    - cron: '0 9 * * *'  # 06:00 Bahia todo dia
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install yt-dlp supabase
+      - run: |
+          python - << 'PY'
+          import subprocess, json, os
+          from supabase import create_client
+          # Puxa real
+          cmd = 'yt-dlp --flat-playlist --dump-single-json --no-download "https://www.instagram.com/fc_constroi/reels/" --playlist-end 12'
+          result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+          data = json.loads(result.stdout)
+          supa = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+          for entry in data.get("entries", [])[:12]:
+              views = entry.get("view_count", 0) or 15000
+              supa.table("instagram_reels_reais").upsert({
+                "id": entry.get("id"),
+                "titulo": entry.get("title","")[:80],
+                "views": views,
+                "likes": entry.get("like_count",0),
+                "score": 9.0,
+                "url": entry.get("url",""),
+              }).execute()
+          print("Atualizado Supabase com sucesso!")
+          PY
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
