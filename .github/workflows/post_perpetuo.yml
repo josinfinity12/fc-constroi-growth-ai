@@ -1,50 +1,53 @@
 name: post_perpetuo
-
 on:
   workflow_dispatch:
   schedule:
     - cron: "0 */6 * * *"
-
 jobs:
   post_perpetuo:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Post 100% @fc_constroi BR -> @fcconstruye ES 5 redes
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          IG_COOKIES: ${{ secrets.IG_COOKIES }}
         run: |
           pip install requests yt-dlp -q
           python - << 'PY'
           import os, requests, subprocess
-          url = os.getenv("SUPABASE_URL")
-          key = os.getenv("SUPABASE_KEY")
-          page_id = os.getenv("PAGE_ID")
-          page_token = os.getenv("PAGE_TOKEN")
-          headers = {"apikey": key, "Authorization": f"Bearer {key}"}
-          r = requests.get(f"{url}/rest/v1/instagram_reels_reais?select=*&order=views.desc&limit=1", headers=headers, timeout=15)
-          data = r.json()
-          reel = data[0] if data else {}
-          print(f"Colunas no Supabase: {list(reel.keys())}")
-          # tenta todas as colunas possiveis
-          insta_url = reel.get('video_url') or reel.get('url') or reel.get('video') or reel.get('link') or reel.get('permalink') or reel.get('videoUrl')
-          print(f"Instagram URL achado: {insta_url}")
-          if not insta_url:
-              print("Nenhuma coluna com URL encontrada, print do reel:")
-              print(reel)
-              exit(0)
-          try:
-              result = subprocess.run(["yt-dlp", "-g", insta_url], capture_output=True, text=True, timeout=40)
-              mp4_url = result.stdout.strip().split('\n')[0] if result.stdout else ""
-              print(f"MP4: {mp4_url[:150]}")
-              print(f"yt-dlp erro: {result.stderr[:200]}")
-              if mp4_url.startswith("http"):
-                  fb = requests.post(f"https://graph.facebook.com/v20.0/{page_id}/videos", data={"file_url": mp4_url, "description": reel.get('caption_es') or reel.get('caption') or '', "access_token": page_token}, timeout=60)
-                  print(f"FACEBOOK: {fb.status_code} {fb.text[:800]}")
-          except Exception as e:
-              print(f"ERRO: {e}")
+          SUPA_URL = os.getenv("SUPABASE_URL")
+          SUPA_KEY = os.getenv("SUPABASE_KEY")
+          PAGE_ID = os.getenv("PAGE_ID")
+          PAGE_TOKEN = os.getenv("PAGE_TOKEN")
+          COOKIES = os.getenv("IG_COOKIES")
+          
+          print(f"PAGE_ID:{bool(PAGE_ID)} COOKIES:{bool(COOKIES)}")
+          open('/tmp/cookies.txt','w').write(COOKIES or "")
+          
+          headers = {"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}"}
+          r = requests.get(f"{SUPA_URL}/rest/v1/instagram_reels_reais?select=*&order=score.desc&limit=1", headers=headers, timeout=20)
+          print(f"Supabase: {r.status_code}")
+          reel = r.json()[0]
+          insta_url = reel.get('url')
+          titulo = reel.get('titulo','')
+          print(f"URL: {insta_url}")
+          print(f"Titulo: {titulo}")
+          
+          # Baixa com cookies
+          cmd = ["yt-dlp", "--cookies", "/tmp/cookies.txt", "-g", insta_url]
+          result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+          mp4_url = result.stdout.strip().split('\n')[0] if result.stdout else ""
+          print(f"MP4: {mp4_url[:150]}")
+          if not mp4_url.startswith("http"):
+              print(f"yt-dlp falhou: {result.stderr[:500]}")
+          else:
+              fb = requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"file_url": mp4_url, "description": titulo, "access_token": PAGE_TOKEN}, timeout=120)
+              print(f"FACEBOOK POST: {fb.status_code}")
+              print(f"FACEBOOK RESP: {fb.text[:1000]}")
+              if fb.status_code == 200:
+                  print("✅ POSTOU 100% @fcconstruye !!!")
           PY
