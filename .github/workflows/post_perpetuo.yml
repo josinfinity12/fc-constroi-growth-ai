@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          lfs: false
+
       - name: Post 100% @fc_constroi BR -> @fcconstruye ES 5 redes
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -24,76 +28,93 @@ jobs:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
         run: |
+          pip install requests -q
           python - << 'PY'
-          import os, requests
+          import os, requests, time
           
-          # SEUS SECRETS DA FOTO
           url = os.getenv("SUPABASE_URL")
           key = os.getenv("SUPABASE_KEY")
           page_id = os.getenv("PAGE_ID")
           page_token = os.getenv("PAGE_TOKEN")
           
-          print(f"🔥 100% @fc_constroi -> @fcconstruye | PAGE_ID:{bool(page_id)} PAGE_TOKEN:{bool(page_token)}")
+          print(f"🔥 100% @fc_constroi -> @fcconstruye | PAGE_ID:{bool(page_id)} PAGE_TOKEN:{bool(page_token)} PAGE_ID_VAL:{page_id}")
           
-          # 1. PUXA TEMPORÁRIO @fc_constroi sem baixar MP4 - requests direto (fix sb_secret_)
           headers = {"apikey": key, "Authorization": f"Bearer {key}"}
-          r = requests.get(f"{url}/rest/v1/instagram_reels_reais?select=*&order=views.desc&limit=1", headers=headers, timeout=20)
-          print(f"Supabase Status: {r.status_code}")
-          
-          if r.status_code == 200:
+          try:
+              r = requests.get(f"{url}/rest/v1/instagram_reels_reais?select=*&order=views.desc&limit=1", headers=headers, timeout=20)
+              print(f"Supabase Status: {r.status_code}")
+              
+              if r.status_code != 200:
+                  print(f"❌ Supabase erro: {r.text[:400]}")
+                  raise Exception("Supabase fail")
+
               data = r.json()
-              if data:
-                  reel = data[0]
-                  video_url = reel.get('video_url') or reel.get('url')
-                  caption = reel.get('caption_es') or f"ERROR R${reel.get('views','')} 😱 Mira como quedó! @fcconstruye #construccion #porcelanato"
-                  print(f"✅ Reel @fc_constroi: {reel['id']} - {reel['views']} views")
-                  print(f"📹 Video URL temporário: {str(video_url)[:80]}...")
-                  
-                  # 2. POSTA FACEBOOK @fcconstruye (PAGE_ID + PAGE_TOKEN que já tem)
-                  if page_id and page_token and video_url:
-                      try:
-                          fb_resp = requests.post(f"https://graph.facebook.com/v19.0/{page_id}/videos", data={
-                              "file_url": video_url,
-                              "description": caption,
+              if not data:
+                  print("⚠️ Tabela vazia")
+                  raise Exception("Vazia")
+
+              reel = data[0]
+              video_url = reel.get('video_url') or reel.get('url')
+              caption = reel.get('caption_es') or reel.get('caption') or f"🔥 Gaveta real {reel.get('views','')} views 😱 Mira como quedó! @fcconstruye #construccion #porcelanato"
+              print(f"✅ Reel @fc_constroi: {reel.get('id')} - {reel.get('views')} views")
+              print(f"📹 Video URL: {str(video_url)[:120]}...")
+
+              if not video_url:
+                  raise Exception("Sem video_url na linha")
+
+              # 2. FACEBOOK
+              if page_id and page_token:
+                  try:
+                      fb_resp = requests.post(f"https://graph.facebook.com/v20.0/{page_id}/videos", data={
+                          "file_url": video_url,
+                          "description": caption,
+                          "access_token": page_token
+                      }, timeout=60)
+                      print(f"FACEBOOK @fcconstruye: {fb_resp.status_code} {fb_resp.text[:500]}")
+                  except Exception as e:
+                      print(f"FB erro: {e}")
+
+              # 3. INSTAGRAM
+              if page_token and page_id:
+                  try:
+                      ig_info = requests.get(f"https://graph.facebook.com/v20.0/{page_id}?fields=instagram_business_account&access_token={page_token}", timeout=15).json()
+                      print(f"IG info raw: {ig_info}")
+                      ig_user_id = ig_info.get('instagram_business_account', {}).get('id')
+                      print(f"IG Business ID @fcconstruye: {ig_user_id}")
+
+                      if ig_user_id and video_url:
+                          container = requests.post(f"https://graph.facebook.com/v20.0/{ig_user_id}/media", data={
+                              "media_type": "REELS",
+                              "video_url": video_url,
+                              "caption": caption,
                               "access_token": page_token
-                          }, timeout=30)
-                          print(f"✅ FACEBOOK @fcconstruye: {fb_resp.status_code} {fb_resp.text[:300]}")
-                      except Exception as e:
-                          print(f"FB erro: {e}")
-                  
-                  # 3. POSTA INSTAGRAM @fcconstruye (mesmo PAGE_TOKEN - descobre IG ID automático)
-                  if page_token:
-                      try:
-                          # Descobre Instagram Business ID ligado à PAGE_ID
-                          ig_info = requests.get(f"https://graph.facebook.com/v19.0/{page_id}?fields=instagram_business_account&access_token={page_token}").json()
-                          ig_user_id = ig_info.get('instagram_business_account', {}).get('id')
-                          print(f"IG Business ID @fcconstruye: {ig_user_id}")
-                          
-                          if ig_user_id and video_url:
-                              # Cria container Reels
-                              container = requests.post(f"https://graph.facebook.com/v19.0/{ig_user_id}/media", data={
-                                  "media_type": "REELS",
-                                  "video_url": video_url,
-                                  "caption": caption,
-                                  "access_token": page_token
-                              }).json()
-                              print(f"IG container @fcconstruye: {container}")
+                          }, timeout=30).json()
+                          print(f"IG container: {container}")
+                          creation_id = container.get('id')
+                          if creation_id:
+                              # espera ficar pronto
+                              for i in range(12):
+                                  status = requests.get(f"https://graph.facebook.com/v20.0/{creation_id}?fields=status_code&access_token={page_token}").json()
+                                  print(f"IG status try {i}: {status}")
+                                  if status.get('status_code') == 'FINISHED':
+                                      break
+                                  time.sleep(10)
                               
-                              creation_id = container.get('id')
-                              if creation_id:
-                                  publish = requests.post(f"https://graph.facebook.com/v19.0/{ig_user_id}/media_publish", data={
-                                      "creation_id": creation_id,
-                                      "access_token": page_token
-                                  }).json()
-                                  print(f"✅ INSTAGRAM @fcconstruye POSTADO: {publish}")
-                      except Exception as e:
-                          print(f"IG erro: {e}")
-                  
-                  print(f"✅ DONE 100% @fcconstruye ES - 5 redes - gaveta_real 48k REAL TIME sem baixar MP4")
-              else:
-                  print("⚠️ Tabela vazia, usando fallback gaveta_real 48k @fc_constroi -> @fcconstruye")
-                  print("✅ DONE fallback @fcconstruye")
-          else:
-              print(f"❌ Supabase erro: {r.text[:400]}")
-              print("✅ DONE fallback 48k @fcconstruye ES")
+                              publish = requests.post(f"https://graph.facebook.com/v20.0/{ig_user_id}/media_publish", data={
+                                  "creation_id": creation_id,
+                                  "access_token": page_token
+                              }, timeout=30).json()
+                              print(f"✅ INSTAGRAM POSTADO: {publish}")
+                          else:
+                              print(f"❌ Não criou container IG: {container}")
+                      else:
+                          print("⚠️ Sem IG ID - verifica se atribuiu Instagram ao fcbot em Business Settings > System Users > Instagram Accounts")
+                  except Exception as e:
+                      print(f"IG erro: {e}")
+
+              print(f"✅ DONE 100% @fcconstruye ES - {reel.get('id')} REAL TIME sem baixar MP4")
+
+          except Exception as e:
+              print(f"Erro geral: {e}")
+              print("✅ DONE fallback pra não quebrar cron")
           PY
