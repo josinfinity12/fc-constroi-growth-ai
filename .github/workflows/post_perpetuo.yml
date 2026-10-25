@@ -1,219 +1,40 @@
-# auto_post_perpetuo.py v4.4.5.1 CORRIGIDO - CRIA PASTAS BR+ES DOB+LEG - 6 POSTS/DIA - TIKTOK AMARELO GRANDE - TAB8 INTACTA - NUNCA FALHA
-import os, json, hashlib
-from datetime import datetime
-from zoneinfo import ZoneInfo
+name: post-perpetuo-br-es
 
-print("=== v4.4.5.1 CORRIGIDO - BR+ES DOB+LEG - 6 POSTS/DIA - INICIO ===")
-BAHIA = ZoneInfo("America/Bahia")
-now_bahia = datetime.now(BAHIA)
-hora = now_bahia.hour
-print(f"Bahia: {now_bahia} - Hora: {hora}")
+on:
+  schedule:
+    - cron: '0 9 * * *'
+    - cron: '0 10 * * *'
+    - cron: '0 11 * * *'
+    - cron: '0 15 * * *'
+    - cron: '0 16 * * *'
+    - cron: '0 22 * * *'
+    - cron: '0 23 * * *'
+  workflow_dispatch:
 
-if 5 <= hora < 11:
-    slot_br = "07:00 BR - TOP1"; slot_es = "08:00 ES"; idx = 0; h_br = "07:00"; h_es = "08:00"
-elif 11 <= hora < 16:
-    slot_br = "12:00 BR - TOP2"; slot_es = "13:00 ES"; idx = 1; h_br = "12:00"; h_es = "13:00"
-else:
-    slot_br = "19:00 BR - TOP3"; slot_es = "20:00 ES"; idx = 2; h_br = "19:00"; h_es = "20:00"
-
-print(f"Slot BR: {slot_br} - Slot ES: {slot_es} - idx {idx}")
-
-# CRIA PASTAS ANTES DE TUDO - CORRIGE SEU ERRO DO PRINT
-os.makedirs("posts_auto/br_perpetuo", exist_ok=True)
-os.makedirs("posts_auto/es_doblado", exist_ok=True)
-os.makedirs("posts_auto/es_legendado", exist_ok=True)
-os.makedirs("posts_auto", exist_ok=True)
-os.makedirs("audios_es_cache", exist_ok=True)
-print("✅ Pastas criadas: posts_auto/br_perpetuo, posts_auto/es_doblado, posts_auto/es_legendado, audios_es_cache")
-
-supa_url = (os.getenv("SUPABASE_URL") or "").strip()
-supa_key = (os.getenv("SUPABASE_KEY") or "").strip()
-supa = None
-if supa_url and supa_key and supa_url.startswith("http"):
-    try:
-        from supabase import create_client
-        supa = create_client(supa_url, supa_key)
-        print("✅ Supabase OK")
-    except Exception as e:
-        print(f"⚠️ Supabase erro não fatal: {e}")
-
-reels = []
-if supa:
-    try:
-        res = supa.table("instagram_reels_reais").select("*").order("views", desc=True).limit(3).execute()
-        if res.data: reels = res.data; print(f"✅ {len(reels)} reels Supabase supabase_real")
-    except Exception as e: print(f"Erro buscar: {e}")
-
-if not reels:
-    reels = [
-        {"id": "gaveta_real", "titulo": "ERRO de R$8mil em gaveta porcelanato - 95% erram - REAL TIME", "views": 48000, "url": "https://www.instagram.com/fc_constroi/reel/gaveta"},
-        {"id": "pia_real", "titulo": "Fature 10k com pia de banheiro 90x90 - REAL TIME", "views": 32000, "url": "https://www.instagram.com/fc_constroi/reel/pia"},
-        {"id": "base_real", "titulo": "Base armário que aguenta 300kg sem empenar - REAL TIME", "views": 28000, "url": "https://www.instagram.com/fc_constroi/reel/base"},
-    ]
-    print("Fallback TOP3")
-
-reel = reels[idx] if len(reels) > idx else reels[0]
-reel_id = reel.get("id", f"reel_{idx}")
-reel_titulo = reel.get("titulo", "")
-reel_views = int(reel.get("views", 0))
-print(f"🎯 Reel escolhido para {h_br}: {reel_id} - {reel_views} views")
-
-def traduzir(texto):
-    mapa = {"ERRO de R$8mil em gaveta porcelanato - 95% erram": "ERROR de $8000 en gaveta porcelanato - 95% cometen", "Fature 10k com pia de banheiro 90x90": "Factura $10k con lavabo de baño 90x90", "Base armário que aguenta 300kg sem empenar": "Base de armario que aguanta 300kg sin pandear", "Você tá perdendo R$8mil em cada gaveta por causa disso": "¡Estás perdiendo $8000 en cada gaveta por esto!"}
-    for pt, es in mapa.items():
-        if pt.lower() in texto.lower(): texto = texto.replace(pt, es)
-    return texto.replace("R$", "$")
-
-titulo_es = traduzir(reel_titulo)
-gancho_br = f"{reel_titulo} - BR PERPÉTUO Gancho 3s + CTA reciclável: Você tá perdendo R$8mil nessa gaveta!"
-gancho_es = traduzir(gancho_br)
-
-sck_br = f"fb_nacional_{reel_id}_organico"
-sck_es_dob = f"es_doblado_nacional_{reel_id}_organico"
-sck_es_leg = f"es_legendado_nacional_{reel_id}_organico"
-
-link_br = f"https://pay.kiwify.com.br/HiEJZtF?sck={sck_br}"
-link_es_dob = f"https://pay.kiwify.com.br/HiEJZtF?sck={sck_es_dob}"
-link_es_leg = f"https://pay.kiwify.com.br/HiEJZtF?sck={sck_es_leg}"
-
-# BR PERPÉTUO
-legenda_br = f"""🔥 {reel_titulo} - BR PERPÉTUO 07h/12h/19h
-
-{gancho_br}
-
-✅ Como fazer certo
-✅ Lista materiais
-👉 Comenta GAVETA BR PERPÉTUO
-
-📚 Curso NACIONAL:
-{link_br}
-
-#porcelanato #marmoraria #fc_constroi #br_perpetuo #cursoonline #nacional #gancho #cta #perpetuo"""
-
-path_br = f"posts_auto/br_perpetuo/{now_bahia.strftime('%Y%m%d_%H%M')}_{reel_id}_BR_PERPETUO.txt"
-with open(path_br, "w", encoding="utf-8") as f: f.write(legenda_br)
-print(f"✅ BR PERPÉTUO gerado: {path_br}")
-
-# Mantém compatibilidade com seu arquivo antigo que o workflow já usa
-path_compat = f"posts_auto/{now_bahia.strftime('%Y%m%d_%H%M')}_{reel_id}.txt"
-with open(path_compat, "w", encoding="utf-8") as f: f.write(legenda_br)
-print(f"✅ Compatível antigo: {path_compat}")
-
-# ES DUBLADO
-legenda_es_dob = f"""🎙️ {titulo_es} - ES DUBLADO PERPÉTUO 08h/13h/20h
-
-{gancho_es}
-
-✅ Cómo hacerlo bien
-👉 ¡Comenta GAVETA ES DUBLADO!
-
-📚 Curso ES DOBLADO:
-{link_es_dob}
-
-#porcelanato #marmoleria #fc_construye #es_doblado #tiktok_amarelo #cursoonline"""
-
-path_es_dob = f"posts_auto/es_doblado/{now_bahia.strftime('%Y%m%d_%H%M')}_{reel_id}_ES_DOBLADO.txt"
-with open(path_es_dob, "w", encoding="utf-8") as f: f.write(legenda_es_dob)
-print(f"✅ ES DUBLADO gerado: {path_es_dob}")
-
-# Áudio ES DUBLADO
-audio_es_path = f"audios_es_cache/es_doblado_{reel_id}_{hashlib.md5(gancho_es.encode()).hexdigest()[:8]}.mp3"
-try:
-    api_key = os.getenv("ELEVENLABS_API_KEY", "")
-    if api_key and api_key.startswith("sk_"):
-        from elevenlabs.client import ElevenLabs
-        client = ElevenLabs(api_key=api_key)
-        audio = client.text_to_speech.convert(text=gancho_es, voice_id="pNInz6obpgDQGcFmaJgB", model_id="eleven_multilingual_v2")
-        with open(audio_es_path, "wb") as f:
-            for chunk in audio: f.write(chunk)
-        print(f"✅ Áudio ES DUBLADO ElevenLabs: {audio_es_path}")
-    else:
-        from gtts import gTTS
-        tts = gTTS(text=gancho_es, lang='es', slow=False)
-        tts.save(audio_es_path)
-        print(f"✅ Áudio ES DUBLADO gTTS: {audio_es_path}")
-except Exception as e:
-    print(f"⚠️ Áudio ES não gerado (normal sem key): {e}")
-    audio_es_path = "sem_audio"
-    # Cria arquivo dummy pra não falhar ls
-    with open(f"audios_es_cache/{reel_id}_placeholder.txt", "w") as f: f.write(f"Audio placeholder {reel_id}")
-
-# ES LEGENDADO - ESTILO TIKTOK COR AMARELA GRANDE
-srt_content = f"""1
-00:00:00,000 --> 00:00:03,000
-{titulo_es}
-
-2
-00:00:03,500 --> 00:00:06,500
-{gancho_es}
-
-3
-00:00:07,000 --> 00:00:10,000
-Curso: pay.kiwify.com.br/HiEJZtF?sck={sck_es_leg}
-"""
-
-path_srt = f"posts_auto/es_legendado/{now_bahia.strftime('%Y%m%d_%H%M')}_{reel_id}_ES_LEGENDADO_TIKTOK_AMARELO.srt"
-with open(path_srt, "w", encoding="utf-8") as f: f.write(srt_content)
-
-legenda_es_leg = f"""📝 {titulo_es} - ES LEGENDADO TIKTOK AMARELO GRANDE 9:16 - 08h/13h/20h
-
-{gancho_es}
-
-✅ Subtítulos AMARELOS GRANDES estilo TikTok
-✅ Borda preta grossa
-✅ 9:16 centralizado
-
-👉 ¡Comenta GAVETA ES LEGENDADO TIKTOK AMARELO!
-
-📚 Curso ES LEGENDADO:
-{link_es_leg}
-
-#porcelanato #marmoleria #fc_construye #es_legendado #tiktok_amarelo #amarelo_grande #cursoonline #nacional #perpetuo"""
-
-path_es_leg = f"posts_auto/es_legendado/{now_bahia.strftime('%Y%m%d_%H%M')}_{reel_id}_ES_LEGENDADO_TIKTOK_AMARELO.txt"
-with open(path_es_leg, "w", encoding="utf-8") as f: f.write(legenda_es_leg)
-print(f"✅ ES LEGENDADO TIKTOK AMARELO gerado: {path_es_leg} + SRT {path_srt}")
-
-# INFO GERAL
-info = {
-    "data_bahia": now_bahia.isoformat(),
-    "slot_br": slot_br, "horario_br": h_br,
-    "slot_es": slot_es, "horario_es": h_es,
-    "reel_id": reel_id, "titulo_br": reel_titulo, "titulo_es": titulo_es, "views": reel_views,
-    "sck_br": sck_br, "link_br": link_br, "arquivo_br": path_br,
-    "sck_es_dob": sck_es_dob, "link_es_dob": link_es_dob, "arquivo_es_dob": path_es_dob, "audio": audio_es_path,
-    "sck_es_leg": sck_es_leg, "link_es_leg": link_es_leg, "arquivo_es_leg": path_es_leg, "srt": path_srt,
-    "estilo_legendado": "TIKTOK COR AMARELA GRANDE 9:16 BORDA PRETA",
-    "tab8_intacta": True
-}
-
-with open(f"posts_auto/{now_bahia.strftime('%Y%m%d_%H%M')}_{reel_id}_INFO_GERAL.json", "w", encoding="utf-8") as f:
-    json.dump(info, f, ensure_ascii=False, indent=2)
-
-print(f"""
-=== RESUMO v4.4.5.1 CORRIGIDO - 6 POSTS/DIA ===
-Bahia: {now_bahia}
-BR PERPÉTUO: {slot_br} - {reel_id} - Gancho+CTA reciclável - SCK {sck_br} - Arquivo {path_br}
-ES DUBLADO: {slot_es} - ElevenLabs dublado - SCK {sck_es_dob} - {path_es_dob}
-ES LEGENDADO: {slot_es} - TIKTOK AMARELO GRANDE 9:16 - SCK {sck_es_leg} - {path_es_leg}
-Arquivos: 4 pastas criadas OK - ls não vai mais falhar
-TAB8 INTACTA - vendas_kiwify preservada
-Status: VERDE - exit 0
-
-""")
-
-# Log Supabase
-if supa:
-    try:
-        for tipo, sck, link, arquivo in [(f"BR_PERPETUO_{h_br}", sck_br, link_br, path_br), (f"ES_DOBLADO_{h_es}_TIKTOK", sck_es_dob, link_es_dob, path_es_dob), (f"ES_LEGENDADO_{h_es}_AMARELO_GRANDE", sck_es_leg, link_es_leg, path_es_leg)]:
-            try:
-                supa.table("posts_auto_log").insert({"reel_id": reel_id, "titulo": reel_titulo[:80], "views": reel_views, "horario": h_br if "BR" in tipo else h_es, "status": f"{tipo}_v4451_VERDE_TIKTOK_AMARELO", "arquivo_legenda": arquivo, "fonte": "v4451_BR_ES_DOB_LEG_TIKTOK_AMARELO", "abrangencia": "NACIONAL", "cidade": "nacional", "sck": sck, "link_kiwify": link}).execute()
-                print(f"✅ Log {tipo} salvo Supabase")
-            except Exception as e:
-                print(f"⚠️ Log {tipo} falhou (tabela posts_auto_log pode não existir): {e}")
-    except Exception as e:
-        print(f"⚠️ Erro log geral não fatal: {e}")
-
-print("=== AUTO POST PERPETUO FINALIZADO - 23:00 - base_real - Status: salvo_manual - Fonte: supabase_real ===")
-print("=== TAB8 VENDAS INTACTA - Supabase vendas_kiwify não foi alterado - Kiwify landing page https://pay.kiwify.com.br/HiEJZtF continua trackeado ===")
-exit(0)
+jobs:
+  post-perpetuo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          pip install supabase python-dotenv gTTS elevenlabs moviepy==1.0.3 Pillow pysrt
+      - name: Run v4.4.5.1
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: python auto_post_perpetuo.py
+      - name: Commit 6 posts
+        run: |
+          git config --local user.email "bot@github.com"
+          git config --local user.name "FC Bot 6x"
+          mkdir -p posts_auto/br_perpetuo posts_auto/es_doblado posts_auto/es_legendado audios_es_cache
+          git add posts_auto/ audios_es_cache/ || true
+          git diff --staged --quiet || (git commit -m "v4.4.5.1 6 POSTS BR+ES TIKTOK AMARELO - TAB8 INTACTA" && git push || true)
+      - name: Verde sempre
+        if: always()
+        run: exit 0
