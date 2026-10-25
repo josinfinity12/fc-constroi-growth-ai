@@ -18,35 +18,30 @@ jobs:
           PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
         run: |
-          pip install requests -q
+          pip install requests yt-dlp -q
           python - << 'PY'
-          import os, requests
+          import os, requests, subprocess
           url = os.getenv("SUPABASE_URL")
           key = os.getenv("SUPABASE_KEY")
           page_id = os.getenv("PAGE_ID")
           page_token = os.getenv("PAGE_TOKEN")
-          print(f"PAGE_ID:{bool(page_id)} PAGE_TOKEN:{bool(page_token)} ID_VAL:{page_id}")
-          if not page_id or not page_token:
-              print("PAGE_ID ou PAGE_TOKEN vazio")
-              exit(0)
+          print(f"PAGE_ID:{bool(page_id)} ID_VAL:{page_id}")
           headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+          r = requests.get(f"{url}/rest/v1/instagram_reels_reais?select=*&order=views.desc&limit=1", headers=headers, timeout=15)
+          print(f"Supabase: {r.status_code}")
+          reel = r.json()[0]
+          insta_url = reel.get('video_url')
+          print(f"Instagram URL: {insta_url}")
           try:
-              r = requests.get(f"{url}/rest/v1/instagram_reels_reais?select=*&order=views.desc&limit=1", headers=headers, timeout=15)
-              print(f"Supabase Status: {r.status_code}")
-              data = r.json()
-              if not data:
-                  print("Tabela vazia")
-                  exit(0)
-              reel = data[0]
-              video_url = reel.get('video_url') or reel.get('url') or ""
-              print(f"Video URL raw: {video_url[:150]}")
-              if "instagram.com" in video_url:
-                  print("AVISO: video_url e link do Instagram, nao .mp4 - pulando pra nao travar. Arruma no Supabase.")
+              result = subprocess.run(["yt-dlp", "-g", insta_url], capture_output=True, text=True, timeout=30)
+              mp4_url = result.stdout.strip().split('\n')[0]
+              print(f"MP4 direto: {mp4_url[:120]}")
+              if mp4_url and mp4_url.startswith("http"):
+                  fb = requests.post(f"https://graph.facebook.com/v20.0/{page_id}/videos", data={"file_url": mp4_url, "description": reel.get('caption_es','Gaveta inteligente'), "access_token": page_token}, timeout=60)
+                  print(f"FACEBOOK: {fb.status_code} {fb.text[:600]}")
               else:
-                  if video_url:
-                      fb = requests.post(f"https://graph.facebook.com/v20.0/{page_id}/videos", data={"file_url": video_url, "description": reel.get('caption_es',''), "access_token": page_token}, timeout=30)
-                      print(f"FACEBOOK: {fb.status_code} {fb.text[:500]}")
-              print("DONE 100% @fcconstruye")
+                  print(f"yt-dlp nao retornou mp4: {result.stderr[:300]}")
           except Exception as e:
               print(f"ERRO: {e}")
+          print("DONE")
           PY
