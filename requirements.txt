@@ -34,3 +34,4 @@ torchaudio
 openai
 google-generativeai
 requests
+streamlit-autorefresh
