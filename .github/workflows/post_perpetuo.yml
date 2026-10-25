@@ -5,35 +5,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pip install requests instaloader -q
-      - name: Post sem travar
+      - run: pip install requests yt-dlp -q
+      - name: Baixa 88k e posta @fcconstruye
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          IG_COOKIES: ${{ secrets.IG_COOKIES }}
         run: |
           python - << 'PY'
-          import os, requests, subprocess
+          import os, requests, subprocess, glob
           SUPA_URL=os.getenv("SUPABASE_URL")
           SUPA_KEY=os.getenv("SUPABASE_KEY")
           PAGE_ID=os.getenv("PAGE_ID")
           PAGE_TOKEN=os.getenv("PAGE_TOKEN")
+          COOKIES=os.getenv("IG_COOKIES","")
+          open('/tmp/cookies.txt','w').write(COOKIES)
+          print(f"Cookies: {len(COOKIES)} chars")
           headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}"}
           r=requests.get(f"{SUPA_URL}/rest/v1/instagram_reels_reais?select=*&order=score.desc&limit=1", headers=headers, timeout=20)
           reel=r.json()[0]
           insta_url=reel.get('url')
-          titulo=reel.get('titulo','Armario 88k')
+          titulo=reel.get('titulo','Armario de cozinha planejado 88k')
           print(f"URL: {insta_url}")
-          shortcode=insta_url.split("/p/")[1].split("/")[0] if "/p/" in insta_url else insta_url.split("/reel/")[1].split("/")[0]
-          print(f"Shortcode: {shortcode}")
-          cmd=["instaloader","--","-","--no-captions","--no-metadata-json","--no-compress-json","--dirname-pattern=/tmp","--filename-pattern=video","--","--",f"-{shortcode}"]
-          # Baixa com instaloader público sem login
-          try:
-              subprocess.run(["instaloader","--no-captions","--dirname-pattern=/tmp","--filename-pattern=video", f"-- -{shortcode}"], capture_output=True, text=True, timeout=30)
-          except Exception as e:
-              print(e)
-          import glob
-          files=glob.glob("/tmp/*.mp4")+glob.glob("/tmp/video/*.mp4")+glob.glob("*.mp4")
-          print(f"Arquivos: {files}")
+
+          # BAIXA COM YT-DLP + COOKIES
+          cmd=["yt-dlp","--cookies","/tmp/cookies.txt","-o","/tmp/video.%(ext)s","--no-playlist","--socket-timeout","20", insta_url]
+          res=subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+          print(res.stdout[-1000:])
+          print(res.stderr[-1000:])
+
+          files=glob.glob("/tmp/video.*")
+          print(f"Arquivos baixados: {files}")
+          if files:
+              fpath=files[0]
+              print(f"Enviando {fpath} {os.path.getsize(fpath)} bytes pro FB {PAGE_ID}")
+              with open(fpath,'rb') as f:
+                  fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": titulo, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
+              print(f"FACEBOOK: {fb.status_code}")
+              print(fb.text[:1500])
+              if fb.status_code==200:
+                  print("✅ POSTOU 100% @fcconstruye !!!")
+          else:
+              print("❌ Não baixou, cookies podem ter expirado")
           PY
