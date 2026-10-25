@@ -1,3 +1,16 @@
+name: post_perpetuo
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+jobs:
+  post_perpetuo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Post 100% @fc_constroi BR -> @fcconstruye ES 5 redes
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -14,20 +27,26 @@
           page_token = os.getenv("PAGE_TOKEN")
           print(f"PAGE_ID:{bool(page_id)} PAGE_TOKEN:{bool(page_token)} ID_VAL:{page_id}")
           if not page_id or not page_token:
-              print("❌ PAGE_ID ou PAGE_TOKEN vazio no GitHub Secrets - arruma os 2 com FB_")
+              print("PAGE_ID ou PAGE_TOKEN vazio")
               exit(0)
           headers = {"apikey": key, "Authorization": f"Bearer {key}"}
-          r = requests.get(f"{url}/rest/v1/instagram_reels_reais?select=*&order=views.desc&limit=1", headers=headers, timeout=10)
-          print(f"Supabase: {r.status_code}")
-          data = r.json()
-          reel = data[0]
-          video_url = reel.get('video_url') or reel.get('url')
-          print(f"Video URL raw: {video_url}")
-          # Só posta se for .mp4 direto, se for link do Instagram pula pra não travar
-          if video_url and "instagram.com" in video_url:
-              print("⚠️ Video URL é link do Instagram, não .mp4 - precisa coluna video_url com .mp4 direto no Supabase. Pulando post pra não travar.")
-          else:
-              fb = requests.post(f"https://graph.facebook.com/v20.0/{page_id}/videos", data={"file_url": video_url, "description": reel.get('caption_es',''), "access_token": page_token}, timeout=30)
-              print(f"FACEBOOK: {fb.status_code} {fb.text[:400]}")
-          print("DONE")
+          try:
+              r = requests.get(f"{url}/rest/v1/instagram_reels_reais?select=*&order=views.desc&limit=1", headers=headers, timeout=15)
+              print(f"Supabase Status: {r.status_code}")
+              data = r.json()
+              if not data:
+                  print("Tabela vazia")
+                  exit(0)
+              reel = data[0]
+              video_url = reel.get('video_url') or reel.get('url') or ""
+              print(f"Video URL raw: {video_url[:150]}")
+              if "instagram.com" in video_url:
+                  print("AVISO: video_url e link do Instagram, nao .mp4 - pulando pra nao travar. Arruma no Supabase.")
+              else:
+                  if video_url:
+                      fb = requests.post(f"https://graph.facebook.com/v20.0/{page_id}/videos", data={"file_url": video_url, "description": reel.get('caption_es',''), "access_token": page_token}, timeout=30)
+                      print(f"FACEBOOK: {fb.status_code} {fb.text[:500]}")
+              print("DONE 100% @fcconstruye")
+          except Exception as e:
+              print(f"ERRO: {e}")
           PY
