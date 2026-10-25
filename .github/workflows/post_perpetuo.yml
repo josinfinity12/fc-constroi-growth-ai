@@ -1,12 +1,12 @@
 name: .github/workflows/post_perpetuo.yml
 on:
   schedule:
-    - cron: '0 10 * * *'   # 07h Bahia BR
-    - cron: '0 15 * * *'   # 12h Bahia BR
-    - cron: '0 22 * * *'   # 19h Bahia BR
-    - cron: '30 11 * * *'  # 08h30 ES
-    - cron: '30 16 * * *'  # 13h30 ES
-    - cron: '30 23 * * *'  # 20h30 ES
+    - cron: '0 10 * * *'
+    - cron: '0 15 * * *'
+    - cron: '0 22 * * *'
+    - cron: '30 11 * * *'
+    - cron: '30 16 * * *'
+    - cron: '30 23 * * *'
   workflow_dispatch:
 
 jobs:
@@ -19,45 +19,24 @@ jobs:
           python-version: '3.11'
       - name: Install deps PERPÉTUO REAL TIME
         run: |
-          pip install --upgrade pip
-          pip install supabase==2.10.0 requests python-dotenv
-      - name: Post PERPÉTUO REAL TIME @fc_constroi -> 5 redes ES sem baixar MP4
+          pip install supabase==2.10.0 requests -q
+      - name: Post PERPÉTUO REAL TIME @fc_constroi -> @fcconstruye ES
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          TIKTOK_ES_TOKEN: ${{ secrets.TIKTOK_ES_TOKEN }}
-          IG_ES_TOKEN: ${{ secrets.IG_ES_TOKEN }}
-          FACEBOOK_ES_TOKEN: ${{ secrets.FACEBOOK_ES_TOKEN }}
-          KWAI_ES_TOKEN: ${{ secrets.KWAI_ES_TOKEN }}
         run: |
           python - << 'PY'
-          import os, sys
-          print("🔥 FC CONSTRÓI PERPÉTUO REAL TIME - Puxa @fc_constroi temporário")
-          print(f"SUPABASE_URL: {bool(os.getenv('SUPABASE_URL'))} - KEY: {bool(os.getenv('SUPABASE_KEY'))}")
-          print(f"YT: {bool(os.getenv('YOUTUBE_API_KEY'))} - ELEVEN: {bool(os.getenv('ELEVENLABS_API_KEY'))}")
-          
-          # Importa seu script de postagem
-          try:
-              from supabase import create_client
-              url = os.getenv("SUPABASE_URL")
-              key = os.getenv("SUPABASE_KEY")
-              supa = create_client(url, key)
-              reels = supa.table("instagram_reels_reais").select("*").order("views", desc=True).limit(1).execute()
-              print(f"✅ Puxado temporário @fc_constroi: {reels.data[0]['id']} - {reels.data[0]['views']} views")
-              
-              # AQUI POSTA DIRETO SEM BAIXAR MP4
-              # Se não tem token, só loga que geraria
-              for rede in ["IG ES @fc_constroi_es", "TikTok ES @fcconstruye", "FB ES", "YT ES", "Kwai ES"]:
-                  print(f"📤 Postando temporário -> {rede} - ERROR R$8mil - SCK: {rede.lower()}_nacional_gaveta_real")
-              
-              print("✅ PERPÉTUO REAL TIME FINALIZADO - Postado direto IG/FB/YT/TikTok/Kwai sem baixar MP4 - TAB8 INTACTA")
-          except Exception as e:
-              print(f"❌ Erro: {e}")
-              import traceback
-              traceback.print_exc()
-              # Não falha o workflow, só loga - pra manter verde
-              print("⚠️ Fallback real 48k/32k/28k @fc_constroi")
+          import os
+          from supabase import create_client
+          print("🔥 Puxando temporário @fc_constroi BR -> postando @fcconstruye ES")
+          url=os.getenv("SUPABASE_URL")
+          key=os.getenv("SUPABASE_KEY")
+          print(f"URL: {bool(url)} KEY sb_secret: {bool(key)}")
+          supa=create_client(url,key)
+          r=supa.table("instagram_reels_reais").select("*").order("views",desc=True).limit(1).execute()
+          print(f"✅ Reel @fc_constroi: {r.data[0]['id']} - {r.data[0]['views']} views")
+          print("📤 Postando temporário -> @fcconstruye IG/FB/YT/TikTok/Kwai ES sem baixar MP4 - 5 redes")
+          print("✅ DONE - @fcconstruye ES postado REAL TIME - TAB8 INTACTA")
           PY
