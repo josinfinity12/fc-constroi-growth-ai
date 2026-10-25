@@ -1,4 +1,4 @@
-# FC CONSTRÓI • GROWTH AI v4.4.5 - BR PERPÉTUO + ES DUBLADO/LEGENDADO SEPARADOS - 100% AUTO - TAB8 INTACTA
+# FC CONSTRÓI • GROWTH AI v4.4.5 - BR PERPÉTUO + ES DUBLADO/LEGENDADO SEPARADOS - 100% AUTO
 import streamlit as st
 import pandas as pd
 import numpy as np
