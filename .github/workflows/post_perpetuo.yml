@@ -1,38 +1,25 @@
-name: update
+name: Atualiza @fc_constroi REAL TIME
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 9 * * *'
+    - cron: '0 6 * * *' # 06h Bahia
+  workflow_dispatch:
+
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Run pip install yt-dlp supabase
-        run: pip install supabase
-      - name: Run python - << 'PY'
+      - name: Install deps REAL TIME
+        run: |
+          pip install --upgrade supabase requests
+          pip install supabase==2.10.0
+      - name: Atualiza Supabase REAL TIME @fc_constroi
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: |
-          python - << 'PY'
-          import os
-          print("FIX v4.4.5.3 - SEM .get em None - 100% VERDE")
-          url = os.getenv("SUPABASE_URL","")
-          key = os.getenv("SUPABASE_KEY","")
-          if not url:
-              print("Sem SUPABASE mas VERDE")
-              exit(0)
-          from supabase import create_client
-          supa = create_client(url, key)
-          data = {"id":"gaveta_real","titulo":"ERRO R$8mil gaveta - REAL TIME FIX","views":48000}
-          try:
-              supa.table("instagram_reels_reais").upsert(data, on_conflict="id").execute()
-              print("OK VERDE")
-          except Exception as e:
-              print(f"Skip mas VERDE: {e}")
-          exit(0)
-          PY
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+        run: python scripts/atualiza_real_time.py
