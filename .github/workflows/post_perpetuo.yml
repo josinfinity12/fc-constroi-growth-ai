@@ -1,24 +1,36 @@
 name: post_perpetuo
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * *'
+    - cron: '0 17 * * *'
+    - cron: '0 0 * * *'
+
 jobs:
   post_perpetuo:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
+      - name: Install deps
+        run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg -qq
-          pip install requests yt-dlp edge-tts openai-whisper deep-translator -q
+          pip install requests yt-dlp edge-tts openai-whisper deep-translator instagrapi google-api-python-client google-auth-httplib2 google-auth-oauthlib -q
 
-      - name: DUBLA, LEGENDA, DESCRICAO ES + POSTA FB + IG REELS AUTO
+      - name: TOP 3 VIRAIS @fc_constroi -> @fcconstruye + LOGO + YOUTUBE SHORTS
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          IG_SESSIONID: ${{ secrets.IG_SESSIONID }}
           PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
           python - << 'PY'
-          import os, requests, subprocess, glob, asyncio, time
+          import os, requests, subprocess, glob, asyncio, time, random
+          from instagrapi import Client
           import whisper
           from deep_translator import GoogleTranslator
           import edge_tts
@@ -28,101 +40,123 @@ jobs:
           PAGE_ID=os.getenv("PAGE_ID")
           PAGE_TOKEN=os.getenv("PAGE_TOKEN")
 
-          # 1. PEGA REEL DO SUPABASE
-          headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}"}
-          r=requests.get(f"{SUPA_URL}/rest/v1/instagram_reels_reais?select=*&order=score.desc&limit=1", headers=headers, timeout=20)
-          reel=r.json()[0]
-          insta_url=reel.get('url')
-          titulo_pt=reel.get('titulo','Armario planejado')
-          print(f"BAIXANDO: {insta_url}")
+          print("=== TOP VIRAL @fc_constroi ===")
+          cl=Client()
+          cl.login_by_sessionid(os.getenv("IG_SESSIONID"))
+          user_id = cl.user_id_from_username("fc_constroi")
+          medias = cl.user_medias(user_id, 50)
+          tops=[]
+          for m in medias:
+              if m.media_type==2 or getattr(m, 'product_type','')=='clips':
+                  views = getattr(m, 'view_count', 0) or m.like_count*80
+                  if views>3000: tops.append((views, m))
+          tops.sort(key=lambda x: x[0], reverse=True)
+          hour = time.gmtime().tm_hour
+          idx = 0 if hour==12 else 1 if hour==17 else 2
+          if idx >= len(tops): idx=0
+          top_views, top_media = tops[idx]
+          insta_url = f"https://www.instagram.com/reel/{top_media.code}/"
+          titulo_pt = top_media.caption_text[:150] if top_media.caption_text else "Obra"
+          print(f"TOP {idx+1}: {top_media.code} {top_views} views")
 
-          subprocess.run(["yt-dlp","-o","/tmp/video.%(ext)s","--no-playlist", insta_url], timeout=90)
+          for f in glob.glob("/tmp/video*"):
+              try: os.remove(f)
+              except: pass
+          subprocess.run(["yt-dlp","-o","/tmp/video.%(ext)s","--no-playlist", insta_url], timeout=120)
           fpath=glob.glob("/tmp/video.*")[0]
-          subprocess.run(["ffmpeg","-y","-i",fpath,"-vn","-acodec","pcm_s16le","-ar","16000","/tmp/audio.wav"], check=True)
+          subprocess.run(["ffmpeg","-y","-i",fpath,"-vn","-acodec","pcm_s16le","-ar","16000","/tmp/audio.wav"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-          # 2. TRANSCREVE PT > TRADUZ ES LATAM
           model = whisper.load_model("tiny")
           texto_pt = model.transcribe("/tmp/audio.wav", language="pt")["text"].strip() or titulo_pt
           try:
               texto_es = GoogleTranslator(source='pt', target='es').translate(texto_pt)
               titulo_es = GoogleTranslator(source='pt', target='es').translate(titulo_pt)
           except:
-              texto_es = texto_pt; titulo_es = titulo_pt
-          print(f"PT: {texto_pt}\nES: {texto_es}")
+              texto_es=texto_pt; titulo_es=titulo_pt
 
-          # 3. DESCRICAO 100% ESPANHOL LATAM - IGUAL FB E IG
-          descricao_auto = f"""{titulo_es.capitalize()} | FC Construye
+          descricao_es = f"""{titulo_es.capitalize()} | FC Construye
 
           {texto_es}
 
-          ¿Te gustó este acabado? Así se hace un trabajo que dura años.
+          SIGUE @fcconstruye
 
-          GUARDA este video para tu próxima remodelación
-          SIGUE a @fcconstruye para más tips
-
-          Para toda Latinoamérica
-
-          #fcconstruye #construccion #latinoamerica #mexico #colombia #argentina #chile #peru #ecuador #cocina #armariococina #obra #remodelacion #albañileria #tipdeobra
+          #fcconstruye #españa #usa #miami #texas #latinosusa #viral
           """
 
-          # 4. DUBLAÇÃO MEXICANA + LEGENDA ESPANHOL
-          open("/tmp/legenda.srt","w", encoding="utf-8").write(f"1\n00:00:00,000 --> 00:00:15,000\n{texto_es}\n")
+          open("/tmp/legenda.srt","w", encoding="utf-8").write(f"1\n00:00:00,000 --> 00:00:20,000\n{texto_es}\n")
           async def gen_tts():
               await edge_tts.Communicate(texto_es, "es-MX-JorgeNeural", rate="-5%").save("/tmp/audio_es.mp3")
           asyncio.run(gen_tts())
-          subprocess.run(["ffmpeg","-y","-i",fpath,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True)
-          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-vf","subtitles=/tmp/legenda.srt:force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1'","-c:a","copy","/tmp/video_final.mp4"], check=True)
+
+          # DUBLA
+          subprocess.run(["ffmpeg","-y","-i",fpath,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          
+          # LEGENDA + LOGO @fcconstruye
+          logo_path = "logo.png" if os.path.exists("logo.png") else None
+          if logo_path:
+              print("Aplicando LOGO fcconstruye")
+              subprocess.run([
+                  "ffmpeg","-y","-i","/tmp/temp_dub.mp4","-i",logo_path,
+                  "-filter_complex","[0:v]subtitles=/tmp/legenda.srt:force_style='FontSize=24'[sub];[sub][1:v]overlay=W-w-20:20:format=auto,format=yuv420p",
+                  "-c:a","copy","/tmp/video_final.mp4"
+              ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          else:
+              subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-vf","subtitles=/tmp/legenda.srt:force_style='FontSize=24'","-c:a","copy","/tmp/video_final.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          
           final_video="/tmp/video_final.mp4"
-          print(f"VIDEO FINAL: {os.path.getsize(final_video)} bytes - DUBLADO E LEGENDADO ES")
 
-          # 5. FACEBOOK - SEU ORIGINAL 100%
-          with open(final_video,'rb') as f:
-              fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": descricao_auto, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
-          print(f"✅ FACEBOOK: {fb.status_code} {fb.text[:200]}")
-
-          # 6. INSTAGRAM REELS AUTOMATICO - MESMO VIDEO, MESMA DESCRICAO ES
+          # FACEBOOK
           try:
-              # Descobre IG ID
+              with open(final_video,'rb') as f:
+                  fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": descricao_es, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
+              print(f"FB: {fb.status_code}")
+          except Exception as e: print(f"FB erro {e}")
+
+          # INSTAGRAM REELS
+          try:
               ig_resp = requests.get(f"https://graph.facebook.com/v20.0/{PAGE_ID}?fields=instagram_business_account&access_token={PAGE_TOKEN}", timeout=15)
               ig_id = ig_resp.json().get("instagram_business_account", {}).get("id")
-              print(f"IG ID: {ig_id}")
-              if not ig_id:
-                  print("❌ IG nao conectado. Vai em business.facebook.com > Contas > Instagram > Conectar @fcconstruye")
-              else:
-                  # Sobe video pro Supabase pra ter URL publica pro IG
-                  fname = f"final_{int(time.time())}.mp4"
-                  with open(final_video,'rb') as f:
-                      up = requests.post(f"{SUPA_URL}/storage/v1/object/videos/{fname}", headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}", "Content-Type":"video/mp4", "x-upsert":"true"}, data=f, timeout=120)
-                  print(f"SUPABASE STORAGE UP: {up.status_code}")
-                  public_url = f"{SUPA_URL}/storage/v1/object/public/videos/{fname}"
-                  print(f"URL PUBLICA: {public_url}")
+              fname = f"final_{int(time.time())}_{random.randint(100,999)}.mp4"
+              with open(final_video,'rb') as f:
+                  up = requests.post(f"{SUPA_URL}/storage/v1/object/videos/{fname}", headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}", "Content-Type":"video/mp4", "x-upsert":"true"}, data=f, timeout=180)
+              public_url = f"{SUPA_URL}/storage/v1/object/public/videos/{fname}"
+              cont = requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media", data={"media_type":"REELS","video_url":public_url,"caption":descricao_es,"access_token":PAGE_TOKEN}, timeout=30)
+              if cont.status_code==200:
+                  creation_id=cont.json().get("id")
+                  for _ in range(15):
+                      st=requests.get(f"https://graph.facebook.com/v20.0/{creation_id}?fields=status_code&access_token={PAGE_TOKEN}", timeout=15)
+                      if "FINISHED" in st.text: break
+                      time.sleep(10)
+                  pub=requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media_publish", data={"creation_id":creation_id,"access_token":PAGE_TOKEN}, timeout=30)
+                  print(f"IG REELS: {pub.status_code}")
+          except Exception as e: print(f"IG erro {e}")
 
-                  # Cria container Reels no IG
-                  container_data = {
-                      "media_type": "REELS",
-                      "video_url": public_url,
-                      "caption": descricao_auto,
-                      "access_token": PAGE_TOKEN
-                  }
-                  cont = requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media", data=container_data, timeout=30)
-                  print(f"IG CONTAINER: {cont.status_code} {cont.text[:500]}")
-                  if cont.status_code == 200:
-                      creation_id = cont.json().get("id")
-                      # Espera processar
-                      for i in range(12):
-                          status = requests.get(f"https://graph.facebook.com/v20.0/{creation_id}?fields=status_code&access_token={PAGE_TOKEN}", timeout=15)
-                          print(f"IG STATUS {i}: {status.text[:300]}")
-                          if "FINISHED" in status.text:
-                              break
-                          time.sleep(10)
-                      # Publica
-                      pub = requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media_publish", data={"creation_id": creation_id, "access_token": PAGE_TOKEN}, timeout=30)
-                      print(f"✅ IG REELS PUBLICADO: {pub.status_code} {pub.text[:500]}")
-                  else:
-                      print(f"IG falhou criar container - verifique se videos bucket é publico no Supabase")
+          # YOUTUBE SHORTS - MESMO VIRAL DUBLADO COM LOGO
+          try:
+              from google.oauth2.credentials import Credentials
+              from googleapiclient.discovery import build
+              from googleapiclient.http import MediaFileUpload
+              creds = Credentials(
+                  None,
+                  refresh_token=os.getenv("YOUTUBE_REFRESH_TOKEN"),
+                  token_uri="https://oauth2.googleapis.com/token",
+                  client_id=os.getenv("YOUTUBE_CLIENT_ID"),
+                  client_secret=os.getenv("YOUTUBE_CLIENT_SECRET"),
+                  scopes=["https://www.googleapis.com/auth/youtube.upload"]
+              )
+              youtube = build("youtube", "v3", credentials=creds)
+              request = youtube.videos().insert(
+                  part="snippet,status",
+                  body={
+                      "snippet": {"title": f"{titulo_es[:90]} | FC Construye", "description": descricao_es, "tags": ["fcconstruye","construccion","españa","usa","latinos"], "categoryId": "26"},
+                      "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False}
+                  },
+                  media_body=MediaFileUpload(final_video, chunksize=-1, resumable=True)
+              )
+              response = request.execute()
+              print(f"YOUTUBE SHORTS: https://youtube.com/shorts/{response.get('id')}")
           except Exception as e:
-              print(f"IG ERRO: {e}")
-              import traceback; traceback.print_exc()
+              print(f"YouTube erro (secrets ok?): {e}")
 
-          print("🏁 PERPETUO FB + IG REELS - TUDO EM ESPANHOL LATAM DUBLADO LEGENDADO @fcconstruye")
+          print("FINALIZADO - IG + FB + YOUTUBE + LOGO")
           PY
