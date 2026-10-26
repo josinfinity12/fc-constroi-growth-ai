@@ -15,15 +15,18 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg -qq
-          pip install requests yt-dlp edge-tts openai-whisper deep-translator instagrapi -q
+          pip install requests yt-dlp edge-tts openai-whisper deep-translator instagrapi google-api-python-client google-auth google-auth-oauthlib -q
 
-      - name: TOP 3 VIRAIS + LOGO
+      - name: TOP 3 VIRAIS + LOGO + YOUTUBE
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           IG_SESSIONID: ${{ secrets.IG_SESSIONID }}
           PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: |
           python - << 'PY'
           import os, requests, subprocess, glob, asyncio, time, random
@@ -121,24 +124,73 @@ jobs:
               ig_id = ig_resp.json().get("instagram_business_account", {}).get("id")
               if not ig_id:
                   print("ERRO: instagram_business_account nao encontrado")
-                  exit(0)
-              fname = f"final_{int(time.time())}_{random.randint(100,999)}.mp4"
-              with open(final_video,'rb') as f:
-                  up = requests.post(f"{SUPA_URL}/storage/v1/object/videos/{fname}", headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}", "Content-Type":"video/mp4", "x-upsert":"true"}, data=f, timeout=180)
-              print(f"Supabase upload: {up.status_code}")
-              public_url = f"{SUPA_URL}/storage/v1/object/public/videos/{fname}"
-              cont = requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media", data={"media_type":"REELS","video_url":public_url,"caption":descricao_es,"access_token":PAGE_TOKEN}, timeout=30)
-              print(f"IG container: {cont.status_code} {cont.text[:300]}")
-              if cont.status_code==200:
-                  creation_id=cont.json().get("id")
-                  for i in range(15):
-                      st=requests.get(f"https://graph.facebook.com/v20.0/{creation_id}?fields=status_code&access_token={PAGE_TOKEN}", timeout=15)
-                      print(f"Status {i}: {st.text[:200]}")
-                      if "FINISHED" in st.text: break
-                      time.sleep(10)
-                  pub=requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media_publish", data={"creation_id":creation_id,"access_token":PAGE_TOKEN}, timeout=30)
-                  print(f"IG PUBLISH: {pub.status_code} {pub.text[:300]}")
+              else:
+                  fname = f"final_{int(time.time())}_{random.randint(100,999)}.mp4"
+                  with open(final_video,'rb') as f:
+                      up = requests.post(f"{SUPA_URL}/storage/v1/object/videos/{fname}", headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}", "Content-Type":"video/mp4", "x-upsert":"true"}, data=f, timeout=180)
+                  print(f"Supabase upload: {up.status_code}")
+                  public_url = f"{SUPA_URL}/storage/v1/object/public/videos/{fname}"
+                  cont = requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media", data={"media_type":"REELS","video_url":public_url,"caption":descricao_es,"access_token":PAGE_TOKEN}, timeout=30)
+                  print(f"IG container: {cont.status_code} {cont.text[:300]}")
+                  if cont.status_code==200:
+                      creation_id=cont.json().get("id")
+                      for i in range(15):
+                          st=requests.get(f"https://graph.facebook.com/v20.0/{creation_id}?fields=status_code&access_token={PAGE_TOKEN}", timeout=15)
+                          print(f"Status {i}: {st.text[:200]}")
+                          if "FINISHED" in st.text: break
+                          time.sleep(10)
+                      pub=requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media_publish", data={"creation_id":creation_id,"access_token":PAGE_TOKEN}, timeout=30)
+                      print(f"IG PUBLISH: {pub.status_code} {pub.text[:300]}")
           except Exception as e: print(f"IG erro {e}")
 
-          print("FINALIZADO")
+          # YOUTUBE SHORTS - ADICIONADO
+          try:
+              from google.oauth2.credentials import Credentials
+              from google.auth.transport.requests import Request as GoogleRequest
+              from googleapiclient.discovery import build
+              from googleapiclient.http import MediaFileUpload
+
+              print("Iniciando upload YouTube Shorts...")
+              creds = Credentials(
+                  None,
+                  refresh_token=os.getenv("YT_REFRESH_TOKEN"),
+                  token_uri="https://oauth2.googleapis.com/token",
+                  client_id=os.getenv("YT_CLIENT_ID"),
+                  client_secret=os.getenv("YT_CLIENT_SECRET"),
+                  scopes=["https://www.googleapis.com/auth/youtube.upload"]
+              )
+              creds.refresh(GoogleRequest())
+              youtube = build('youtube', 'v3', credentials=creds)
+
+              titulo_yt = f"{titulo_es[:80]} #Shorts"
+              descricao_yt = f"{descricao_es}\n\n#shorts #construccion #viral"
+
+              media = MediaFileUpload(final_video, mimetype="video/mp4", resumable=True)
+              request = youtube.videos().insert(
+                  part="snippet,status",
+                  body={
+                      "snippet": {
+                          "title": titulo_yt,
+                          "description": descricao_yt,
+                          "tags": ["fcconstruye","construccion","shorts","viral","obra"],
+                          "categoryId": "26"
+                      },
+                      "status": {
+                          "privacyStatus": "public",
+                          "selfDeclaredMadeForKids": False
+                      }
+                  },
+                  media_body=media
+              )
+              response = None
+              while response is None:
+                  status, response = request.next_chunk()
+                  if status:
+                      print(f"YouTube upload {int(status.progress()*100)}%")
+              print(f"YOUTUBE OK! Video ID: {response['id']} https://youtube.com/shorts/{response['id']}")
+          except Exception as e:
+              print(f"YOUTUBE erro: {e}")
+              import traceback; traceback.print_exc()
+
+          print("FINALIZADO - FB + IG + YT")
           PY
