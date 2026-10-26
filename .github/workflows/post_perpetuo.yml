@@ -17,7 +17,7 @@ jobs:
           sudo apt-get install -y ffmpeg -qq
           pip install requests yt-dlp edge-tts openai-whisper deep-translator instagrapi google-api-python-client google-auth google-auth-oauthlib -q
 
-      - name: TOP 3 VIRAIS + LOGO + YOUTUBE
+      - name: TOP 3 VIRAIS + LEGENDA TIKTOK + YOUTUBE
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -91,8 +91,13 @@ jobs:
           except:
               texto_es=texto_pt; titulo_es=titulo_pt
 
-          descricao_es = f"{titulo_es.capitalize()} | FC Construye\n\n{texto_es}\n\nSIGUE @fcconstruye\n\n#fcconstruye #construccion #españa #usa #miami #texas #latinosusa #obra #reforma #viral"
-          open("/tmp/legenda.srt","w", encoding="utf-8").write(f"1\n00:00:00,000 --> 00:00:20,000\n{texto_es}\n")
+          descricao_es_full = f"{titulo_es.capitalize()} | FC Construye\n\n{texto_es}\n\nSIGUE @fcconstruye\n\n#fcconstruye #construccion #españa #usa #miami #texas #latinosusa #obra #reforma #viral"
+          descricao_es = descricao_es_full[:2100]
+          descricao_yt = descricao_es_full[:4500]
+          print(f"Legenda tam: full={len(descricao_es_full)} ig={len(descricao_es)} yt={len(descricao_yt)}")
+          
+          # LEGENDA ESTILO TIKTOK AMARELA
+          open("/tmp/legenda.srt","w", encoding="utf-8").write(f"1\n00:00:00,000 --> 00:00:20,000\n{texto_es[:200]}\n")
 
           async def gen_tts():
               await edge_tts.Communicate(texto_es, "es-MX-JorgeNeural", rate="-5%").save("/tmp/audio_es.mp3")
@@ -100,13 +105,14 @@ jobs:
 
           subprocess.run(["ffmpeg","-y","-i",fpath,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
           
-          logo_path = "logo.png" if os.path.exists("logo.png") else None
-          if logo_path:
-              print("Aplicando LOGO fcconstruye")
-              subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-i",logo_path,"-filter_complex","[0:v]subtitles=/tmp/legenda.srt:force_style='FontSize=24'[sub];[sub][1:v]overlay=W-w-20:20:format=auto,format=yuv420p","-c:a","copy","/tmp/video_final.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          else:
-              print("Sem logo.png, postando so com legenda")
-              subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-vf","subtitles=/tmp/legenda.srt:force_style='FontSize=24'","-c:a","copy","/tmp/video_final.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          # SEM LOGO - APENAS LEGENDA TIKTOK AMARELA
+          print("Sem logo, aplicando legenda TikTok amarela")
+          tiktok_style = "FontName=Arial Black,FontSize=28,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Outline=4,Shadow=1,BorderStyle=1,Alignment=2,MarginV=90"
+          subprocess.run([
+              "ffmpeg","-y","-i","/tmp/temp_dub.mp4",
+              "-vf",f"subtitles=/tmp/legenda.srt:force_style='{tiktok_style}'",
+              "-c:a","copy","/tmp/video_final.mp4"
+          ], check=True)
           
           final_video="/tmp/video_final.mp4"
           
@@ -143,7 +149,7 @@ jobs:
                       print(f"IG PUBLISH: {pub.status_code} {pub.text[:300]}")
           except Exception as e: print(f"IG erro {e}")
 
-          # YOUTUBE SHORTS - ADICIONADO
+          # YOUTUBE SHORTS
           try:
               from google.oauth2.credentials import Credentials
               from google.auth.transport.requests import Request as GoogleRequest
@@ -163,8 +169,6 @@ jobs:
               youtube = build('youtube', 'v3', credentials=creds)
 
               titulo_yt = f"{titulo_es[:80]} #Shorts"
-              descricao_yt = f"{descricao_es}\n\n#shorts #construccion #viral"
-
               media = MediaFileUpload(final_video, mimetype="video/mp4", resumable=True)
               request = youtube.videos().insert(
                   part="snippet,status",
