@@ -5,48 +5,92 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pip install requests yt-dlp -q
-      - name: Baixa 88k e posta @fcconstruye
+      
+      - name: Instala ffmpeg e libs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg -qq
+          pip install requests yt-dlp elevenlabs -q
+
+      - name: Baixa, DUBLA pra espanhol e posta @fcconstruye
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
           IG_COOKIES: ${{ secrets.IG_COOKIES }}
+          ELEVEN_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVEN_VOICE: ${{ secrets.ELEVENLABS_VOICE_ID }}
         run: |
           python - << 'PY'
-          import os, requests, subprocess, glob
+          import os, requests, subprocess, glob, time, json
+          
           SUPA_URL=os.getenv("SUPABASE_URL")
           SUPA_KEY=os.getenv("SUPABASE_KEY")
           PAGE_ID=os.getenv("PAGE_ID")
           PAGE_TOKEN=os.getenv("PAGE_TOKEN")
           COOKIES=os.getenv("IG_COOKIES","")
+          ELEVEN_KEY=os.getenv("ELEVEN_KEY")
+          ELEVEN_VOICE=os.getenv("ELEVEN_VOICE")
+          
           open('/tmp/cookies.txt','w').write(COOKIES)
-          print(f"Cookies: {len(COOKIES)} chars")
           headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}"}
           r=requests.get(f"{SUPA_URL}/rest/v1/instagram_reels_reais?select=*&order=score.desc&limit=1", headers=headers, timeout=20)
           reel=r.json()[0]
           insta_url=reel.get('url')
           titulo=reel.get('titulo','Armario de cozinha planejado 88k')
+          # Traduz titulo pra espanhol simples
+          titulo_es = titulo.replace("Armário","Armario").replace("cozinha","de cocina") + " | Tip de obra #fcconstruye"
           print(f"URL: {insta_url}")
+          print(f"Titulo ES: {titulo_es}")
 
-          # BAIXA COM YT-DLP + COOKIES
+          # BAIXA
           cmd=["yt-dlp","--cookies","/tmp/cookies.txt","-o","/tmp/video.%(ext)s","--no-playlist","--socket-timeout","20", insta_url]
-          res=subprocess.run(cmd, capture_output=True, text=True, timeout=90)
-          print(res.stdout[-1000:])
-          print(res.stderr[-1000:])
+          subprocess.run(cmd, timeout=90)
+          fpath=glob.glob("/tmp/video.*")[0]
+          print(f"Baixado: {fpath} {os.path.getsize(fpath)} bytes")
 
-          files=glob.glob("/tmp/video.*")
-          print(f"Arquivos baixados: {files}")
-          if files:
-              fpath=files[0]
-              print(f"Enviando {fpath} {os.path.getsize(fpath)} bytes pro FB {PAGE_ID}")
+          final_video = fpath
+
+          # DUBLAGEM COM ELEVENLABS DUBBING API (PT -> ES)
+          if ELEVEN_KEY:
+              print("Iniciando dublagem ElevenLabs PT -> ES...")
+              # 1. Cria dubbing
               with open(fpath,'rb') as f:
-                  fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": titulo, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
-              print(f"FACEBOOK: {fb.status_code}")
-              print(fb.text[:1500])
-              if fb.status_code==200:
-                  print("✅ POSTOU 100% @fcconstruye !!!")
-          else:
-              print("❌ Não baixou, cookies podem ter expirado")
+                  dub_req = requests.post(
+                      "https://api.elevenlabs.io/v1/dubbing",
+                      headers={"xi-api-key": ELEVEN_KEY},
+                      data={
+                          "source_lang": "pt",
+                          "target_lang": "es",
+                          "mode": "automatic",
+                          "num_speakers": "1"
+                      },
+                      files={"file": f},
+                      timeout=120
+                  )
+              print(f"Dubbing create: {dub_req.status_code} {dub_req.text[:500]}")
+              if dub_req.status_code==200:
+                  dub_id = dub_req.json().get("dubbing_id")
+                  # 2. Espera terminar
+                  for i in range(30):
+                      time.sleep(10)
+                      status = requests.get(f"https://api.elevenlabs.io/v1/dubbing/{dub_id}", headers={"xi-api-key": ELEVEN_KEY}, timeout=20).json()
+                      print(f"Status dubbing: {status.get('status')}")
+                      if status.get('status')=='dubbed':
+                          break
+                  # 3. Baixa video dublado
+                  dub_dl = requests.get(f"https://api.elevenlabs.io/v1/dubbing/{dub_id}/media/es", headers={"xi-api-key": ELEVEN_KEY}, timeout=120)
+                  if dub_dl.status_code==200:
+                      open("/tmp/video_dublado.mp4","wb").write(dub_dl.content)
+                      final_video = "/tmp/video_dublado.mp4"
+                      print(f"DUBLADO OK: {os.path.getsize(final_video)} bytes")
+                  else:
+                      print(f"Erro baixar dublado: {dub_dl.text[:500]}")
+          
+          print(f"Enviando {final_video} pro FB {PAGE_ID}")
+          with open(final_video,'rb') as f:
+              fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": titulo_es, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
+          print(f"FACEBOOK: {fb.status_code}")
+          print(fb.text[:1500])
           PY
