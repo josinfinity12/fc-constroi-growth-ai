@@ -20,9 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-  with:
-    fetch-depth: 1
-    lfs: false
+        with:
+          fetch-depth: 1
+          lfs: false
+
       - name: Install deps
         run: |
           sudo apt-get update -qq
@@ -49,33 +50,32 @@ jobs:
           from instagrapi.exceptions import ClientThrottledError
 
           SESSION_ID=os.getenv("IG_SESSIONID","").strip()
-          MODO_TESTE=os.getenv("MODO_TESTE","sim")=="sim"
-          print(f"MODO TESTE: {MODO_TESTE}")
+          val = os.getenv("MODO_TESTE","sim")
+          MODO_TESTE = val == "sim" or val == ""
+          print(f"MODO TESTE INPUT: '{val}' -> MODO_TESTE={MODO_TESTE}")
 
           cl = Client()
           cl.delay_range = [3, 7]
           cl.login_by_sessionid(SESSION_ID)
           print(f"Login IG OK como: {cl.username}")
 
-          # FIX 429 - usa endpoint privado com retry
           user_id = None
           for tentativa in range(4):
               try:
-                  print(f"Tentando pegar ID do fc_constroi... tentativa {tentativa+1}")
                   user_info = cl.user_info_by_username("fc_constroi")
                   user_id = user_info.pk
                   print(f"ID encontrado: {user_id}")
                   break
-              except ClientThrottledError as e:
-                  wait = 60 + tentativa*30 + random.randint(0,20)
-                  print(f"Instagram bloqueou (429), esperando {wait}s...")
+              except ClientThrottledError:
+                  wait = 60 + tentativa*30
+                  print(f"429 bloqueado, esperando {wait}s...")
                   time.sleep(wait)
               except Exception as e:
                   print(f"Erro {e}, esperando 15s...")
                   time.sleep(15)
           
           if not user_id:
-              print("Nao conseguiu pegar ID do fc_constroi, abortando")
+              print("Nao pegou ID, abortando")
               exit(1)
 
           medias = cl.user_medias(user_id, 40)
@@ -92,7 +92,7 @@ jobs:
           top_views, top_media = tops[idx]
           insta_url = f"https://www.instagram.com/reel/{top_media.code}/"
           titulo_pt = top_media.caption_text[:150] if top_media.caption_text else "Obra"
-          print(f"PEGANDO DE fc_constroi TOP {idx+1}: {top_media.code} {top_views} views -> VAI POSTAR EM @fcconstruye")
+          print(f"TOP {idx+1}: {top_media.code} {top_views} views")
 
           for f in glob.glob("/tmp/video*") + glob.glob("/tmp/thumb*") + glob.glob("/tmp/audio*") + glob.glob("/tmp/temp*") + glob.glob("/tmp/legenda*"):
               try: os.remove(f)
@@ -122,12 +122,7 @@ jobs:
           subprocess.run(["ffmpeg","-y","-i",fpath,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
           
           tiktok_style = "FontName=Arial,FontSize=14,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Outline=2,Shadow=0,BorderStyle=4,Alignment=2,MarginV=60"
-          subprocess.run([
-              "ffmpeg","-y","-i","/tmp/temp_dub.mp4",
-              "-vf",f"subtitles=/tmp/legenda.srt:force_style='{tiktok_style}'",
-              "-c:a","copy","-preset","ultrafast","-crf","28",
-              "/tmp/video_final.mp4"
-          ], check=True)
+          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-vf",f"subtitles=/tmp/legenda.srt:force_style='{tiktok_style}'","-c:a","copy","-preset","ultrafast","-crf","28","/tmp/video_final.mp4"], check=True)
           
           final_video="/tmp/video_final.mp4"
           thumb_path="/tmp/thumb.jpg"
@@ -139,7 +134,7 @@ jobs:
               try:
                   print("Postando IG em @fcconstruye...")
                   cl.clip_upload(final_video, descricao_es, thumbnail=thumb_path)
-                  print("IG OK em @fcconstruye!")
+                  print("IG OK!")
               except Exception as e: print(f"IG erro {e}")
               try:
                   with open(final_video,'rb') as f:
