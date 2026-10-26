@@ -2,9 +2,9 @@ name: post_perpetuo
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 12 * * *'  # 14h Espanha / 08h Miami
-    - cron: '0 17 * * *'   # 19h Espanha / 13h Miami - PICO ES
-    - cron: '0 0 * * *'    # 20h Miami / 17h Los Angeles - PICO USA
+    - cron: '0 12 * * *'
+    - cron: '0 17 * * *'
+    - cron: '0 0 * * *'
 
 jobs:
   post_perpetuo:
@@ -17,10 +17,8 @@ jobs:
           sudo apt-get install -y ffmpeg -qq
           pip install requests yt-dlp edge-tts openai-whisper deep-translator instagrapi google-api-python-client google-auth google-auth-oauthlib -q
 
-      - name: TOP 3 VIRAIS + LEGENDA TIKTOK + YOUTUBE
+      - name: TOP 3 VIRAIS INLINE
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           IG_SESSIONID: ${{ secrets.IG_SESSIONID }}
           PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
@@ -29,33 +27,22 @@ jobs:
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: |
           python - << 'PY'
-          import os, requests, subprocess, glob, asyncio, time, random
+          import os, subprocess, glob, asyncio, time, random
           from instagrapi import Client
           import whisper
           from deep_translator import GoogleTranslator
-          import edge_tts
+          import edge_tts, requests
 
-          SUPA_URL=os.getenv("SUPABASE_URL")
-          SUPA_KEY=os.getenv("SUPABASE_KEY")
+          SESSION_ID=os.getenv("IG_SESSIONID","").strip()
           PAGE_ID=os.getenv("PAGE_ID")
           PAGE_TOKEN=os.getenv("PAGE_TOKEN")
-          SESSION_ID=os.getenv("IG_SESSIONID","").strip()
 
-          print(f"SESSIONID len: {len(SESSION_ID)}")
-          
           cl = Client()
-          try:
-              if len(SESSION_ID) >= 30 and "apps.googleusercontent" not in SESSION_ID:
-                  cl.login_by_sessionid(SESSION_ID)
-                  print("Login com sessionid OK")
-              else:
-                  print("Sessionid invalido ou com token Google, usando modo publico")
-          except Exception as e:
-              print(f"Falha login sessionid, tentando modo publico: {e}")
-          
+          cl.login_by_sessionid(SESSION_ID)
+          print("Login IG OK")
+
           user_id = cl.user_id_from_username("fc_constroi")
           medias = cl.user_medias(user_id, 50)
-
           tops=[]
           for m in medias:
               if m.media_type==2 or getattr(m, 'product_type','')=='clips':
@@ -63,17 +50,13 @@ jobs:
                   if views>3000: tops.append((views, m))
           tops.sort(key=lambda x: x[0], reverse=True)
           
-          if not tops:
-              print("Nenhum viral encontrado")
-              exit(1)
-
           hour = time.gmtime().tm_hour
           idx = 0 if hour==12 else 1 if hour==17 else 2
           if idx >= len(tops): idx=0
           top_views, top_media = tops[idx]
           insta_url = f"https://www.instagram.com/reel/{top_media.code}/"
           titulo_pt = top_media.caption_text[:150] if top_media.caption_text else "Obra"
-          print(f"HORARIO {hour} UTC -> TOP {idx+1}: {top_media.code} {top_views} views {insta_url}")
+          print(f"TOP {idx+1}: {top_media.code} {top_views} views")
 
           for f in glob.glob("/tmp/video*"):
               try: os.remove(f)
@@ -94,9 +77,6 @@ jobs:
           descricao_es_full = f"{titulo_es.capitalize()} | FC Construye\n\n{texto_es}\n\nSIGUE @fcconstruye\n\n#fcconstruye #construccion #españa #usa #miami #texas #latinosusa #obra #reforma #viral"
           descricao_es = descricao_es_full[:2100]
           descricao_yt = descricao_es_full[:4500]
-          print(f"Legenda tam: full={len(descricao_es_full)} ig={len(descricao_es)} yt={len(descricao_yt)}")
-          
-          # LEGENDA ESTILO TIKTOK AMARELA
           open("/tmp/legenda.srt","w", encoding="utf-8").write(f"1\n00:00:00,000 --> 00:00:20,000\n{texto_es[:200]}\n")
 
           async def gen_tts():
@@ -105,49 +85,31 @@ jobs:
 
           subprocess.run(["ffmpeg","-y","-i",fpath,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
           
-          # SEM LOGO - APENAS LEGENDA TIKTOK AMARELA
-          print("Sem logo, aplicando legenda TikTok amarela")
+          print("Aplicando legenda TikTok amarela inline")
           tiktok_style = "FontName=Arial Black,FontSize=28,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Outline=4,Shadow=1,BorderStyle=1,Alignment=2,MarginV=90"
           subprocess.run([
               "ffmpeg","-y","-i","/tmp/temp_dub.mp4",
               "-vf",f"subtitles=/tmp/legenda.srt:force_style='{tiktok_style}'",
-              "-c:a","copy","/tmp/video_final.mp4"
+              "-c:a","copy","-preset","ultrafast","-crf","28",
+              "/tmp/video_final.mp4"
           ], check=True)
           
           final_video="/tmp/video_final.mp4"
           
+          # INSTAGRAM INLINE 100% TEMPO REAL
+          try:
+              print("Postando IG inline com clip_upload...")
+              cl.clip_upload(final_video, descricao_es)
+              print("IG INLINE OK!")
+          except Exception as e:
+              print(f"IG inline erro {e}")
+
           # FACEBOOK
           try:
               with open(final_video,'rb') as f:
                   fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": descricao_es, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
-              print(f"FB: {fb.status_code} {fb.text[:200]}")
+              print(f"FB: {fb.status_code}")
           except Exception as e: print(f"FB erro {e}")
-
-          # INSTAGRAM REELS
-          try:
-              ig_resp = requests.get(f"https://graph.facebook.com/v20.0/{PAGE_ID}?fields=instagram_business_account&access_token={PAGE_TOKEN}", timeout=15)
-              print(f"IG Account resp: {ig_resp.text[:200]}")
-              ig_id = ig_resp.json().get("instagram_business_account", {}).get("id")
-              if not ig_id:
-                  print("ERRO: instagram_business_account nao encontrado")
-              else:
-                  fname = f"final_{int(time.time())}_{random.randint(100,999)}.mp4"
-                  with open(final_video,'rb') as f:
-                      up = requests.post(f"{SUPA_URL}/storage/v1/object/videos/{fname}", headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}", "Content-Type":"video/mp4", "x-upsert":"true"}, data=f, timeout=180)
-                  print(f"Supabase upload: {up.status_code}")
-                  public_url = f"{SUPA_URL}/storage/v1/object/public/videos/{fname}"
-                  cont = requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media", data={"media_type":"REELS","video_url":public_url,"caption":descricao_es,"access_token":PAGE_TOKEN}, timeout=30)
-                  print(f"IG container: {cont.status_code} {cont.text[:300]}")
-                  if cont.status_code==200:
-                      creation_id=cont.json().get("id")
-                      for i in range(15):
-                          st=requests.get(f"https://graph.facebook.com/v20.0/{creation_id}?fields=status_code&access_token={PAGE_TOKEN}", timeout=15)
-                          print(f"Status {i}: {st.text[:200]}")
-                          if "FINISHED" in st.text: break
-                          time.sleep(10)
-                      pub=requests.post(f"https://graph.facebook.com/v20.0/{ig_id}/media_publish", data={"creation_id":creation_id,"access_token":PAGE_TOKEN}, timeout=30)
-                      print(f"IG PUBLISH: {pub.status_code} {pub.text[:300]}")
-          except Exception as e: print(f"IG erro {e}")
 
           # YOUTUBE SHORTS
           try:
@@ -155,46 +117,18 @@ jobs:
               from google.auth.transport.requests import Request as GoogleRequest
               from googleapiclient.discovery import build
               from googleapiclient.http import MediaFileUpload
-
-              print("Iniciando upload YouTube Shorts...")
-              creds = Credentials(
-                  None,
-                  refresh_token=os.getenv("YT_REFRESH_TOKEN"),
-                  token_uri="https://oauth2.googleapis.com/token",
-                  client_id=os.getenv("YT_CLIENT_ID"),
-                  client_secret=os.getenv("YT_CLIENT_SECRET"),
-                  scopes=["https://www.googleapis.com/auth/youtube.upload"]
-              )
+              print("Iniciando upload YouTube...")
+              creds = Credentials(None, refresh_token=os.getenv("YT_REFRESH_TOKEN"), token_uri="https://oauth2.googleapis.com/token", client_id=os.getenv("YT_CLIENT_ID"), client_secret=os.getenv("YT_CLIENT_SECRET"), scopes=["https://www.googleapis.com/auth/youtube.upload"])
               creds.refresh(GoogleRequest())
               youtube = build('youtube', 'v3', credentials=creds)
-
-              titulo_yt = f"{titulo_es[:80]} #Shorts"
               media = MediaFileUpload(final_video, mimetype="video/mp4", resumable=True)
-              request = youtube.videos().insert(
-                  part="snippet,status",
-                  body={
-                      "snippet": {
-                          "title": titulo_yt,
-                          "description": descricao_yt,
-                          "tags": ["fcconstruye","construccion","shorts","viral","obra"],
-                          "categoryId": "26"
-                      },
-                      "status": {
-                          "privacyStatus": "public",
-                          "selfDeclaredMadeForKids": False
-                      }
-                  },
-                  media_body=media
-              )
+              request = youtube.videos().insert(part="snippet,status", body={"snippet": {"title": f"{titulo_es[:80]} #Shorts", "description": descricao_yt, "tags": ["fcconstruye","construccion","shorts","viral"], "categoryId": "26"}, "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False}}, media_body=media)
               response = None
               while response is None:
                   status, response = request.next_chunk()
-                  if status:
-                      print(f"YouTube upload {int(status.progress()*100)}%")
-              print(f"YOUTUBE OK! Video ID: {response['id']} https://youtube.com/shorts/{response['id']}")
+              print(f"YOUTUBE OK! {response['id']}")
           except Exception as e:
               print(f"YOUTUBE erro: {e}")
-              import traceback; traceback.print_exc()
 
-          print("FINALIZADO - FB + IG + YT")
+          print("FINALIZADO")
           PY
