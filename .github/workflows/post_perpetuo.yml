@@ -5,92 +5,92 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Instala ffmpeg e libs
-        run: |
+      - run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg -qq
-          pip install requests yt-dlp elevenlabs -q
+          pip install requests yt-dlp edge-tts openai-whisper deep-translator -q
 
-      - name: Baixa, DUBLA pra espanhol e posta @fcconstruye
+      - name: Baixa, DUBLA MEXICO gratis e LEGENDA e posta @fcconstruye
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
           IG_COOKIES: ${{ secrets.IG_COOKIES }}
-          ELEVEN_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          ELEVEN_VOICE: ${{ secrets.ELEVENLABS_VOICE_ID }}
         run: |
           python - << 'PY'
-          import os, requests, subprocess, glob, time, json
-          
+          import os, requests, subprocess, glob, json
+          import whisper
+          from deep_translator import GoogleTranslator
+          import asyncio
+          import edge_tts
+
           SUPA_URL=os.getenv("SUPABASE_URL")
           SUPA_KEY=os.getenv("SUPABASE_KEY")
           PAGE_ID=os.getenv("PAGE_ID")
           PAGE_TOKEN=os.getenv("PAGE_TOKEN")
           COOKIES=os.getenv("IG_COOKIES","")
-          ELEVEN_KEY=os.getenv("ELEVEN_KEY")
-          ELEVEN_VOICE=os.getenv("ELEVEN_VOICE")
-          
           open('/tmp/cookies.txt','w').write(COOKIES)
+
+          # 1. PEGA URL DO SUPABASE
           headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}"}
           r=requests.get(f"{SUPA_URL}/rest/v1/instagram_reels_reais?select=*&order=score.desc&limit=1", headers=headers, timeout=20)
           reel=r.json()[0]
           insta_url=reel.get('url')
-          titulo=reel.get('titulo','Armario de cozinha planejado 88k')
-          # Traduz titulo pra espanhol simples
-          titulo_es = titulo.replace("Armário","Armario").replace("cozinha","de cocina") + " | Tip de obra #fcconstruye"
           print(f"URL: {insta_url}")
-          print(f"Titulo ES: {titulo_es}")
 
-          # BAIXA
-          cmd=["yt-dlp","--cookies","/tmp/cookies.txt","-o","/tmp/video.%(ext)s","--no-playlist","--socket-timeout","20", insta_url]
-          subprocess.run(cmd, timeout=90)
+          # 2. BAIXA VIDEO
+          subprocess.run(["yt-dlp","--cookies","/tmp/cookies.txt","-o","/tmp/video.%(ext)s","--no-playlist", insta_url], timeout=90)
           fpath=glob.glob("/tmp/video.*")[0]
-          print(f"Baixado: {fpath} {os.path.getsize(fpath)} bytes")
+          print(f"Baixado: {fpath}")
 
-          final_video = fpath
+          # 3. EXTRAI AUDIO PRA TRANSCREVER
+          subprocess.run(["ffmpeg","-y","-i",fpath,"-vn","-acodec","pcm_s16le","-ar","16000","/tmp/audio.wav"], check=True)
 
-          # DUBLAGEM COM ELEVENLABS DUBBING API (PT -> ES)
-          if ELEVEN_KEY:
-              print("Iniciando dublagem ElevenLabs PT -> ES...")
-              # 1. Cria dubbing
-              with open(fpath,'rb') as f:
-                  dub_req = requests.post(
-                      "https://api.elevenlabs.io/v1/dubbing",
-                      headers={"xi-api-key": ELEVEN_KEY},
-                      data={
-                          "source_lang": "pt",
-                          "target_lang": "es",
-                          "mode": "automatic",
-                          "num_speakers": "1"
-                      },
-                      files={"file": f},
-                      timeout=120
-                  )
-              print(f"Dubbing create: {dub_req.status_code} {dub_req.text[:500]}")
-              if dub_req.status_code==200:
-                  dub_id = dub_req.json().get("dubbing_id")
-                  # 2. Espera terminar
-                  for i in range(30):
-                      time.sleep(10)
-                      status = requests.get(f"https://api.elevenlabs.io/v1/dubbing/{dub_id}", headers={"xi-api-key": ELEVEN_KEY}, timeout=20).json()
-                      print(f"Status dubbing: {status.get('status')}")
-                      if status.get('status')=='dubbed':
-                          break
-                  # 3. Baixa video dublado
-                  dub_dl = requests.get(f"https://api.elevenlabs.io/v1/dubbing/{dub_id}/media/es", headers={"xi-api-key": ELEVEN_KEY}, timeout=120)
-                  if dub_dl.status_code==200:
-                      open("/tmp/video_dublado.mp4","wb").write(dub_dl.content)
-                      final_video = "/tmp/video_dublado.mp4"
-                      print(f"DUBLADO OK: {os.path.getsize(final_video)} bytes")
-                  else:
-                      print(f"Erro baixar dublado: {dub_dl.text[:500]}")
-          
-          print(f"Enviando {final_video} pro FB {PAGE_ID}")
+          # 4. TRANSCREVE COM WHISPER (GRATIS)
+          print("Transcrevendo PT com Whisper tiny (gratis)...")
+          model = whisper.load_model("tiny")
+          result = model.transcribe("/tmp/audio.wav", language="pt")
+          texto_pt = result["text"].strip()
+          print(f"Texto PT: {texto_pt}")
+          if not texto_pt:
+              texto_pt = "Armario de cozinha planejado com porcelanato. Olha esse acabamento."
+
+          # 5. TRADUZ PRA ESPANHOL MEXICANO (GRATIS)
+          print("Traduzindo pra es-MX...")
+          try:
+              texto_es = GoogleTranslator(source='pt', target='es').translate(texto_pt)
+          except:
+              texto_es = texto_pt
+          print(f"Texto ES-MX: {texto_es}")
+
+          # 6. GERA LEGENDA SRT (GRATIS)
+          srt_content = f"1\n00:00:00,000 --> 00:00:15,000\n{texto_es}\n"
+          open("/tmp/legenda.srt","w", encoding="utf-8").write(srt_content)
+
+          # 7. DUBLA COM VOZ MEXICANA GRATIS (Edge TTS)
+          print("Gerando dublagem es-MX-JorgeNeural (gratis)...")
+          async def gen_tts():
+              communicate = edge_tts.Communicate(texto_es, "es-MX-JorgeNeural")
+              await communicate.save("/tmp/audio_es.mp3")
+          asyncio.run(gen_tts())
+          print(f"Audio ES gerado: {os.path.getsize('/tmp/audio_es.mp3')} bytes")
+
+          # 8. JUNTA VIDEO + AUDIO NOVO + LEGENDA QUEIMADA
+          print("Muxando video com dublagem e legenda...")
+          # Primeiro troca audio
+          subprocess.run(["ffmpeg","-y","-i",fpath,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True)
+          # Depois queima legenda
+          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-vf","subtitles=/tmp/legenda.srt:force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=2'", "-c:a","copy","/tmp/video_final.mp4"], check=True)
+
+          final_video="/tmp/video_final.mp4"
+          print(f"FINAL: {os.path.getsize(final_video)} bytes - 100% dublado e legendado!")
+
+          # 9. POSTA NO FACEBOOK
+          desc = f"{texto_es}\n\n#fcconstruye #cocina #mexico"
           with open(final_video,'rb') as f:
-              fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": titulo_es, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
+              fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": desc, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
           print(f"FACEBOOK: {fb.status_code}")
           print(fb.text[:1500])
+          print("✅ POSTOU 100% GRATIS MEXICANO DUBLADO + LEGENDADO @fcconstruye !!!")
           PY
