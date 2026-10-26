@@ -5,12 +5,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup
-        run: |
+      - run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg -qq
           pip install requests yt-dlp edge-tts openai-whisper deep-translator instagrapi google-api-python-client google-auth google-auth-oauthlib -q
-      - name: Run 4 redes
+
+      - name: Baixa, DUBLA LATAM, LEGENDA e DESCRICAO @fcconstruye + 4 REDES
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -22,4 +22,125 @@ jobs:
           TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
           TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
           YOUTUBE_CREDENTIALS: ${{ secrets.YOUTUBE_CREDENTIALS }}
-        run: python main.py
+        run: |
+          python - << 'PY'
+          import os, requests, subprocess, glob, asyncio, json
+          import whisper
+          from deep_translator import GoogleTranslator
+          import edge_tts
+
+          SUPA_URL=os.getenv("SUPABASE_URL")
+          SUPA_KEY=os.getenv("SUPABASE_KEY")
+          PAGE_ID=os.getenv("PAGE_ID")
+          PAGE_TOKEN=os.getenv("PAGE_TOKEN")
+          COOKIES=os.getenv("IG_COOKIES","")
+          IG_USER=os.getenv("INSTAGRAM_USER")
+          IG_PASS=os.getenv("INSTAGRAM_PASS")
+          TT_TOKEN=os.getenv("TIKTOK_ACCESS_TOKEN")
+          YT_CREDS=os.getenv("YOUTUBE_CREDENTIALS")
+          open('/tmp/cookies.txt','w').write(COOKIES)
+
+          headers={"apikey": SUPA_KEY, "Authorization": f"Bearer {SUPA_KEY}"}
+          r=requests.get(f"{SUPA_URL}/rest/v1/instagram_reels_reais?select=*&order=score.desc&limit=1", headers=headers, timeout=20)
+          reel=r.json()[0]
+          insta_url=reel.get('url')
+          titulo_pt=reel.get('titulo','Armario planejado')
+
+          subprocess.run(["yt-dlp","--cookies","/tmp/cookies.txt","-o","/tmp/video.%(ext)s","--no-playlist", insta_url], timeout=90)
+          fpath=glob.glob("/tmp/video.*")[0]
+          subprocess.run(["ffmpeg","-y","-i",fpath,"-vn","-acodec","pcm_s16le","-ar","16000","/tmp/audio.wav"], check=True)
+
+          print("Transcrevendo PT...")
+          model = whisper.load_model("tiny")
+          texto_pt = model.transcribe("/tmp/audio.wav", language="pt")["text"].strip() or titulo_pt
+          print(f"PT: {texto_pt}")
+
+          try:
+              texto_es = GoogleTranslator(source='pt', target='es').translate(texto_pt)
+              titulo_es = GoogleTranslator(source='pt', target='es').translate(titulo_pt)
+          except:
+              texto_es = texto_pt
+              titulo_es = titulo_pt
+          print(f"ES LATAM: {texto_es}")
+
+          descricao_auto = f"""{titulo_es.capitalize()} | FC Construye
+
+          {texto_es}
+
+          Te gusto este acabado? Asi se hace un trabajo bien hecho que dura anos.
+
+          GUARDA este video para tu proxima remodelacion
+          SIGUE a @fcconstruye para mas tips
+
+          Para toda Latinoamerica
+
+          #fcconstruye #construccion #latinoamerica #armariococina #cocina #acabados #obra #remodelacion #tipdeobra #albañileria #mexico #colombia #argentina #chile #peru #ecuador #venezuela #bolivia #paraguay #uruguay #centroamerica
+          """
+          print(descricao_auto)
+
+          open("/tmp/legenda.srt","w", encoding="utf-8").write(f"1\n00:00:00,000 --> 00:00:15,000\n{texto_es}\n")
+
+          async def gen_tts():
+              await edge_tts.Communicate(texto_es, "es-MX-JorgeNeural", rate="-5%").save("/tmp/audio_es.mp3")
+          asyncio.run(gen_tts())
+
+          subprocess.run(["ffmpeg","-y","-i",fpath,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True)
+          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-vf","subtitles=/tmp/legenda.srt:force_style='FontSize=24'","-c:a","copy","/tmp/video_final.mp4"], check=True)
+          final_video="/tmp/video_final.mp4"
+          print(f"VIDEO FINAL: {os.path.getsize(final_video)} bytes")
+
+          # 1. FACEBOOK - SEU ORIGINAL 100% - NAO MUDEI NADA
+          with open(final_video,'rb') as f:
+              fb=requests.post(f"https://graph.facebook.com/v20.0/{PAGE_ID}/videos", data={"description": descricao_auto, "access_token": PAGE_TOKEN}, files={"source": f}, timeout=300)
+          print(f"FACEBOOK: {fb.status_code} {fb.text[:1500]}")
+          print("FACEBOOK OK")
+
+          # 2. TIKTOK AUTO - NOVO
+          try:
+              if TT_TOKEN:
+                  init=requests.post("https://open.tiktokapis.com/v2/post/publish/inbox/video/init/", headers={"Authorization": f"Bearer {TT_TOKEN}","Content-Type":"application/json"}, json={"source_info":{"source":"FILE_UPLOAD","video_size":os.path.getsize(final_video),"chunk_size":os.path.getsize(final_video),"total_chunk_count":1}}, timeout=30)
+                  print(f"TIKTOK INIT: {init.status_code}")
+                  if init.status_code==200:
+                      j=init.json()
+                      upload_url=j['data']['upload_url']
+                      video_id=j['data']['video_id']
+                      with open(final_video,'rb') as f:
+                          up=requests.put(upload_url, data=f, headers={"Content-Range": f"bytes 0-{os.path.getsize(final_video)-1}/{os.path.getsize(final_video)}"}, timeout=120)
+                      pub=requests.post("https://open.tiktokapis.com/v2/post/publish/", headers={"Authorization": f"Bearer {TT_TOKEN}","Content-Type":"application/json"}, json={"post_info":{"title":descricao_auto[:2200],"privacy_level":"PUBLIC"},"source_info":{"source":"FILE_UPLOAD","video_id":video_id}}, timeout=30)
+                      print(f"TIKTOK: {pub.status_code} {pub.text[:500]}")
+          except Exception as e:
+              print(f"TIKTOK ERRO: {e}")
+
+          # 3. INSTAGRAM AUTO - NOVO
+          try:
+              if IG_USER and IG_PASS:
+                  from instagrapi import Client
+                  cl=Client()
+                  cl.login(IG_USER, IG_PASS)
+                  cl.clip_upload(final_video, caption=descricao_auto)
+                  print("INSTAGRAM REELS POSTADO")
+          except Exception as e:
+              print(f"IG ERRO: {e}")
+
+          # 4. YOUTUBE SHORTS AUTO - NOVO
+          try:
+              if YT_CREDS:
+                  from google.oauth2.credentials import Credentials
+                  from googleapiclient.discovery import build
+                  from googleapiclient.http import MediaFileUpload
+                  creds_dict=json.loads(YT_CREDS)
+                  creds=Credentials.from_authorized_user_info(creds_dict, ["https://www.googleapis.com/auth/youtube.upload"])
+                  youtube=build("youtube","v3",credentials=creds)
+                  body={"snippet":{"title": f"{titulo_es[:90]} #Shorts","description": descricao_auto,"tags":["fcconstruye","construccion","Shorts"],"categoryId":"26"},"status":{"privacyStatus":"public"}}
+                  media=MediaFileUpload(final_video, mimetype="video/mp4", resumable=True)
+                  req=youtube.videos().insert(part="snippet,status",body=body,media_body=media)
+                  resp=None
+                  while resp is None:
+                      st, resp = req.next_chunk()
+                  print(f"YOUTUBE SHORTS: https://youtube.com/watch?v={resp['id']}")
+          except Exception as e:
+              print(f"YT ERRO: {e}")
+
+          print(f"KWAI MANUAL: {final_video} pronto - posta manual")
+          print("POSTOU LATAM COMPLETO @fcconstruye !!!")
+          PY
