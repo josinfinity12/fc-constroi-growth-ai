@@ -23,14 +23,12 @@ jobs:
         with:
           fetch-depth: 1
           lfs: false
-
       - name: Install deps
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg -qq
-          pip install "instagrapi[video]" requests edge-tts openai-whisper deep-translator google-api-python-client google-auth google-auth-oauthlib pillow imageio-ffmpeg -q
+          pip install "instagrapi[video]" requests edge-tts openai-whisper deep-translator google-api-python-client google-auth google-auth-oauthlib pillow -q
           pip install --no-deps "moviepy==2.2.1" -q
-
       - name: TOP 3 VIRAIS INLINE
         env:
           IG_SESSIONID: ${{ secrets.IG_SESSIONID }}
@@ -40,154 +38,85 @@ jobs:
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           MODO_TESTE: ${{ inputs.modo_teste }}
+          FC_ID: "15036334738"
         run: |
           python - << 'PY'
-          import os, subprocess, glob, asyncio, time, random, shutil
+          import os, time, subprocess, glob, asyncio, shutil
           from instagrapi import Client
           from instagrapi.exceptions import ClientThrottledError
-
-          SESSION_ID=os.getenv("IG_SESSIONID","").strip()
-          val = os.getenv("MODO_TESTE","sim")
-          MODO_TESTE = val == "sim" or val == "" or val is None
-          print(f"MODO: {val} -> TESTE={MODO_TESTE}")
-
-          cl = Client()
-          cl.delay_range = [3, 7]
+          SESSION_ID=os.getenv("IG_SESSIONID").strip()
+          MODO_TESTE=os.getenv("MODO_TESTE","sim")=="sim"
+          USER_ID=int(os.getenv("FC_ID"))
+          print(f"MODO TESTE={MODO_TESTE} USER_ID={USER_ID}")
+          cl=Client(); cl.delay_range=[2,4]
           cl.login_by_sessionid(SESSION_ID)
-          print(f"Login OK: {cl.username}")
-
-          # PEGA ID SEM DAR 429
-          user_id = None
-          for i in range(4):
+          print(f"Login OK como {cl.username}")
+          medias=None
+          for i in range(3):
               try:
-                  info = cl.user_info_by_username("fc_constroi")
-                  user_id = info.pk
-                  print(f"ID fc_constroi: {user_id}")
+                  medias=cl.user_medias(USER_ID, 40)
                   break
               except ClientThrottledError:
-                  w = 60 + i*30 + random.randint(5,15)
-                  print(f"429... esperando {w}s")
+                  w=300+i*120
+                  print(f"429 em user_medias, esperando {w}s... (IP do GitHub bloqueado)")
                   time.sleep(w)
-              except Exception as e:
-                  print(f"Erro ID: {e}")
-                  time.sleep(15)
-          if not user_id:
-              raise SystemExit("Nao conseguiu ID fc_constroi")
-
-          medias = cl.user_medias(user_id, 40)
+          if not medias:
+              raise SystemExit("Ainda em 429 - espera 2h e tenta de novo. Nao fica rodando!")
           tops=[]
           for m in medias:
-              if m.media_type==2 or getattr(m, 'product_type','')=='clips':
-                  views = getattr(m, 'view_count',0) or m.like_count*80
-                  if views>3000:
-                      tops.append((views,m))
-          tops.sort(key=lambda x: x[0], reverse=True)
-          if not tops:
-              raise SystemExit("Nenhum reel viral encontrado")
-
-          hour = time.gmtime().tm_hour
-          idx = 0 if hour==12 else 1 if hour==17 else 2
-          if idx >= len(tops): idx=0
-          top_views, top_media = tops[idx]
-          print(f"TOP {idx+1}/{len(tops)}: {top_media.code} views={top_views}")
-
-          # LIMPA TMP
-          for f in glob.glob("/tmp/video*") + glob.glob("/tmp/thumb*") + glob.glob("/tmp/audio*") + glob.glob("/tmp/temp*") + glob.glob("/tmp/legenda*") + glob.glob("/tmp/*.mp4"):
-              try: os.remove(f)
+              if m.media_type==2 or getattr(m,'product_type','')=='clips':
+                  views=getattr(m,'view_count',0) or m.like_count*80
+                  if views>3000: tops.append((views,m))
+          tops.sort(key=lambda x:x[0], reverse=True)
+          hour=time.gmtime().tm_hour
+          idx=0 if hour==12 else 1 if hour==17 else 2
+          if idx>=len(tops): idx=0
+          top_views, top_media=tops[idx]
+          print(f"TOP {idx+1}: {top_media.code} views={top_views}")
+          for f in glob.glob("/tmp/*"): 
+              try:
+                  if "video" in f or "audio" in f or "thumb" in f or "temp" in f or "legenda" in f: os.remove(f)
               except: pass
-
-          # DOWNLOAD DIRETO SEM YT-DLP
-          print(f"Baixando clip {top_media.pk}...")
-          video_path = cl.clip_download(top_media.pk, folder="/tmp")
-          fpath = str(video_path)
-          print(f"Video baixado: {fpath}")
-
-          # AUDIO
-          subprocess.run(["ffmpeg","-y","-i",fpath,"-vn","-acodec","pcm_s16le","-ar","16000","/tmp/audio.wav"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
+          video_path=str(cl.clip_download(top_media.pk, folder="/tmp"))
+          print(f"Baixado {video_path}")
+          subprocess.run(["ffmpeg","-y","-i",video_path,"-vn","-acodec","pcm_s16le","-ar","16000","/tmp/audio.wav"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
           import whisper
           from deep_translator import GoogleTranslator
           import edge_tts
-
-          model = whisper.load_model("tiny")
-          result = model.transcribe("/tmp/audio.wav", language="pt")
-          texto_pt = result["text"].strip() or (top_media.caption_text[:150] if top_media.caption_text else "Obra incrivel")
-          titulo_pt = top_media.caption_text[:150] if top_media.caption_text else texto_pt[:80]
-          print(f"PT: {texto_pt[:100]}")
-
+          model=whisper.load_model("tiny")
+          texto_pt=model.transcribe("/tmp/audio.wav", language="pt")["text"].strip() or "Obra incrivel"
+          titulo_pt=top_media.caption_text[:120] if top_media.caption_text else texto_pt[:80]
           try:
-              texto_es = GoogleTranslator(source='pt', target='es').translate(texto_pt)
-              titulo_es = GoogleTranslator(source='pt', target='es').translate(titulo_pt)
-          except Exception as e:
-              print(f"Tradutor falhou {e}")
-              texto_es=texto_pt; titulo_es=titulo_pt
-
-          desc_full = f"{titulo_es.capitalize()} | FC Construye\n\n{texto_es}\n\nSIGUE @fcconstruye\n\n#fcconstruye #construccion #latinosusa #obra #reforma #viral"
-          desc_es = desc_full[:2100]
-          desc_yt = desc_full[:4500]
-
-          open("/tmp/legenda.srt","w", encoding="utf-8").write(f"1\n00:00:00,000 --> 00:00:30,000\n{texto_es[:180]}\n")
-
-          async def gen_tts():
-              await edge_tts.Communicate(texto_es, "es-MX-JorgeNeural", rate="-8%").save("/tmp/audio_es.mp3")
-          asyncio.run(gen_tts())
-          print("TTS OK")
-
-          subprocess.run(["ffmpeg","-y","-i",fpath,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-          # LEGENDA ESTILO TIKTOK PEQUENA
-          tiktok_style = "FontName=Arial,FontSize=14,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Outline=2,Shadow=0,BorderStyle=4,Alignment=2,MarginV=60"
-          try:
-              subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-vf",f"subtitles=/tmp/legenda.srt:force_style='{tiktok_style}'","-c:a","copy","-preset","ultrafast","-crf","28","/tmp/video_final.mp4"], check=True)
-          except Exception as e:
-              print(f"Legenda falhou {e}, usando sem legenda")
-              shutil.copy("/tmp/temp_dub.mp4","/tmp/video_final.mp4")
-
-          final_video="/tmp/video_final.mp4"
-          thumb_path="/tmp/thumb.jpg"
-          subprocess.run(["ffmpeg","-y","-i",final_video,"-ss","00:00:00.500","-vframes","1",thumb_path], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          print(f"Final gerado: {final_video}")
-
+              texto_es=GoogleTranslator(source='pt',target='es').translate(texto_pt)
+              titulo_es=GoogleTranslator(source='pt',target='es').translate(titulo_pt)
+          except: texto_es=texto_pt; titulo_es=titulo_pt
+          desc_full=f"{titulo_es.capitalize()} | FC Construye\n\n{texto_es}\n\nSIGUE @fcconstruye\n\n#fcconstruye #construccion #latinosusa #obra #reforma #viral"
+          desc=desc_full[:2100]
+          open("/tmp/legenda.srt","w",encoding="utf-8").write(f"1\n00:00:00,000 --> 00:00:30,000\n{texto_es[:180]}\n")
+          async def tts(): await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="-8%").save("/tmp/audio_es.mp3")
+          asyncio.run(tts())
+          subprocess.run(["ffmpeg","-y","-i",video_path,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          style="FontName=Arial,FontSize=14,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Outline=2,Shadow=0,BorderStyle=4,Alignment=2,MarginV=60"
+          try: subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-vf",f"subtitles=/tmp/legenda.srt:force_style='{style}'","-c:a","copy","-preset","ultrafast","-crf","28","/tmp/video_final.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          except: shutil.copy("/tmp/temp_dub.mp4","/tmp/video_final.mp4")
+          subprocess.run(["ffmpeg","-y","-i","/tmp/video_final.mp4","-ss","0.5","-vframes","1","/tmp/thumb.jpg"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
           if MODO_TESTE:
-              print("MODO TESTE - NAO POSTOU")
+              print("VIDEO FINAL OK - MODO TESTE - NAO POSTOU")
           else:
               import requests
               try:
-                  print("Postando IG @fcconstruye...")
-                  cl.clip_upload(final_video, desc_es, thumbnail=thumb_path)
+                  cl.clip_upload("/tmp/video_final.mp4", desc, thumbnail="/tmp/thumb.jpg")
                   print("IG OK")
-              except Exception as e:
-                  print(f"IG erro {e}")
+              except Exception as e: print(f"IG erro {e}")
               try:
-                  with open(final_video,'rb') as f:
-                      fb=requests.post(f"https://graph.facebook.com/v20.0/{os.getenv('PAGE_ID')}/videos", data={"description": desc_es, "access_token": os.getenv('PAGE_TOKEN')}, files={"source": f}, timeout=300)
-                  print(f"FB: {fb.status_code}")
-              except Exception as e:
-                  print(f"FB erro {e}")
-              try:
-                  from google.oauth2.credentials import Credentials
-                  from google.auth.transport.requests import Request as GoogleRequest
-                  from googleapiclient.discovery import build
-                  from googleapiclient.http import MediaFileUpload
-                  creds = Credentials(None, refresh_token=os.getenv("YT_REFRESH_TOKEN"), token_uri="https://oauth2.googleapis.com/token", client_id=os.getenv("YT_CLIENT_ID"), client_secret=os.getenv("YT_CLIENT_SECRET"), scopes=["https://www.googleapis.com/auth/youtube.upload"])
-                  creds.refresh(GoogleRequest())
-                  youtube = build('youtube', 'v3', credentials=creds)
-                  media = MediaFileUpload(final_video, mimetype="video/mp4", resumable=True)
-                  request = youtube.videos().insert(part="snippet,status", body={"snippet": {"title": f"{titulo_es[:80]} #Shorts", "description": desc_yt, "tags": ["fcconstruye","construccion"], "categoryId": "26"}, "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False}}, media_body=media)
-                  response=None
-                  while response is None:
-                      status, response = request.next_chunk()
-                  print(f"YT OK {response['id']}")
-              except Exception as e:
-                  print(f"YT erro {e}")
+                  with open("/tmp/video_final.mp4",'rb') as f:
+                      r=requests.post(f"https://graph.facebook.com/v20.0/{os.getenv('PAGE_ID')}/videos", data={"description": desc, "access_token": os.getenv('PAGE_TOKEN')}, files={"source": f}, timeout=300)
+                  print(f"FB {r.status_code}")
+              except Exception as e: print(f"FB erro {e}")
           PY
-
       - name: Upload video teste
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: video-teste-latino
-          path: |
-            /tmp/video_final.mp4
-            /tmp/thumb.jpg
-            /tmp/*.mp4
+          path: /tmp/video_final.mp4
