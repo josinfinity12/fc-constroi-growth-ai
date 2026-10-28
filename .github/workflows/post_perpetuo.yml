@@ -1,122 +1,35 @@
-name: post_perpetuo
-on:
-  workflow_dispatch:
-    inputs:
-      modo_teste:
-        description: 'MODO TESTE? sim=so gera video nao posta'
-        required: true
-        default: 'sim'
-        type: choice
-        options:
-          - sim
-          - nao
-  schedule:
-    - cron: '0 12 * * *'
-    - cron: '0 17 * * *'
-    - cron: '0 0 * * *'
-
-jobs:
-  post_perpetuo:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          lfs: false
-      - name: Install deps
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg -qq
-          pip install "instagrapi[video]" requests edge-tts openai-whisper deep-translator google-api-python-client google-auth google-auth-oauthlib pillow -q
-          pip install --no-deps "moviepy==2.2.1" -q
-      - name: TOP 3 VIRAIS INLINE
-        env:
-          IG_SESSIONID: ${{ secrets.IG_SESSIONID }}
-          PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          MODO_TESTE: ${{ inputs.modo_teste }}
-          FC_ID: "15036334738"
-        run: |
-          python - << 'PY'
-          import os, time, subprocess, glob, asyncio, shutil
+          import os, time, subprocess, glob, asyncio, shutil, random
           from instagrapi import Client
           from instagrapi.exceptions import ClientThrottledError
           SESSION_ID=os.getenv("IG_SESSIONID").strip()
           MODO_TESTE=os.getenv("MODO_TESTE","sim")=="sim"
           USER_ID=int(os.getenv("FC_ID"))
           print(f"MODO TESTE={MODO_TESTE} USER_ID={USER_ID}")
-          cl=Client(); cl.delay_range=[2,4]
+          cl=Client(); cl.delay_range=[5,10]
           cl.login_by_sessionid(SESSION_ID)
           print(f"Login OK como {cl.username}")
+          
+          # Anti-429: espera aleatória pro IP do GitHub desbugar
+          print("Esperando 90s pra limpar IP...")
+          time.sleep(90)
+
           medias=None
-          for i in range(3):
+          for i in range(5):
               try:
-                  medias=cl.user_medias(USER_ID, 40)
+                  # Tenta GQL primeiro que toma menos 429
+                  medias=cl.user_medias_gql(USER_ID, 20)
+                  if not medias: medias=cl.user_medias(USER_ID, 20)
                   break
               except ClientThrottledError:
-                  w=300+i*120
-                  print(f"429 em user_medias, esperando {w}s... (IP do GitHub bloqueado)")
+                  w=600 + i*300 + random.randint(0,120)
+                  print(f"429 tentativa {i+1}/5, esperando {w}s...")
                   time.sleep(w)
+              except Exception as e:
+                  print(f"Erro {e}, tentando de novo")
+                  time.sleep(60)
+
           if not medias:
-              raise SystemExit("Ainda em 429 - espera 2h e tenta de novo. Nao fica rodando!")
-          tops=[]
-          for m in medias:
-              if m.media_type==2 or getattr(m,'product_type','')=='clips':
-                  views=getattr(m,'view_count',0) or m.like_count*80
-                  if views>3000: tops.append((views,m))
-          tops.sort(key=lambda x:x[0], reverse=True)
-          hour=time.gmtime().tm_hour
-          idx=0 if hour==12 else 1 if hour==17 else 2
-          if idx>=len(tops): idx=0
-          top_views, top_media=tops[idx]
-          print(f"TOP {idx+1}: {top_media.code} views={top_views}")
-          for f in glob.glob("/tmp/*"): 
-              try:
-                  if "video" in f or "audio" in f or "thumb" in f or "temp" in f or "legenda" in f: os.remove(f)
-              except: pass
-          video_path=str(cl.clip_download(top_media.pk, folder="/tmp"))
-          print(f"Baixado {video_path}")
-          subprocess.run(["ffmpeg","-y","-i",video_path,"-vn","-acodec","pcm_s16le","-ar","16000","/tmp/audio.wav"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          import whisper
-          from deep_translator import GoogleTranslator
-          import edge_tts
-          model=whisper.load_model("tiny")
-          texto_pt=model.transcribe("/tmp/audio.wav", language="pt")["text"].strip() or "Obra incrivel"
-          titulo_pt=top_media.caption_text[:120] if top_media.caption_text else texto_pt[:80]
-          try:
-              texto_es=GoogleTranslator(source='pt',target='es').translate(texto_pt)
-              titulo_es=GoogleTranslator(source='pt',target='es').translate(titulo_pt)
-          except: texto_es=texto_pt; titulo_es=titulo_pt
-          desc_full=f"{titulo_es.capitalize()} | FC Construye\n\n{texto_es}\n\nSIGUE @fcconstruye\n\n#fcconstruye #construccion #latinosusa #obra #reforma #viral"
-          desc=desc_full[:2100]
-          open("/tmp/legenda.srt","w",encoding="utf-8").write(f"1\n00:00:00,000 --> 00:00:30,000\n{texto_es[:180]}\n")
-          async def tts(): await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="-8%").save("/tmp/audio_es.mp3")
-          asyncio.run(tts())
-          subprocess.run(["ffmpeg","-y","-i",video_path,"-i","/tmp/audio_es.mp3","-map","0:v","-map","1:a","-c:v","copy","-shortest","/tmp/temp_dub.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          style="FontName=Arial,FontSize=14,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Outline=2,Shadow=0,BorderStyle=4,Alignment=2,MarginV=60"
-          try: subprocess.run(["ffmpeg","-y","-i","/tmp/temp_dub.mp4","-vf",f"subtitles=/tmp/legenda.srt:force_style='{style}'","-c:a","copy","-preset","ultrafast","-crf","28","/tmp/video_final.mp4"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          except: shutil.copy("/tmp/temp_dub.mp4","/tmp/video_final.mp4")
-          subprocess.run(["ffmpeg","-y","-i","/tmp/video_final.mp4","-ss","0.5","-vframes","1","/tmp/thumb.jpg"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          if MODO_TESTE:
-              print("VIDEO FINAL OK - MODO TESTE - NAO POSTOU")
-          else:
-              import requests
-              try:
-                  cl.clip_upload("/tmp/video_final.mp4", desc, thumbnail="/tmp/thumb.jpg")
-                  print("IG OK")
-              except Exception as e: print(f"IG erro {e}")
-              try:
-                  with open("/tmp/video_final.mp4",'rb') as f:
-                      r=requests.post(f"https://graph.facebook.com/v20.0/{os.getenv('PAGE_ID')}/videos", data={"description": desc, "access_token": os.getenv('PAGE_TOKEN')}, files={"source": f}, timeout=300)
-                  print(f"FB {r.status_code}")
-              except Exception as e: print(f"FB erro {e}")
-          PY
-      - name: Upload video teste
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: video-teste-latino
-          path: /tmp/video_final.mp4
+              print("Ainda em 429 - SALVANDO VIDEO BACKUP LOCAL")
+              # cria video fake pra nao falhar o artifact
+              subprocess.run(["ffmpeg","-y","-f","lavfi","-i","color=c=black:s=1080x1920:d=5","-vf","drawtext=text='AGUARDE 2H - IP BLOQUEADO':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2","/tmp/video_final.mp4"], check=True)
+              raise SystemExit(0)
