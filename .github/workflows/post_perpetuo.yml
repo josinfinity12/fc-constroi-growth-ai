@@ -1,35 +1,107 @@
+name: post_perpetuo
+
+on:
+  workflow_dispatch:
+    inputs:
+      modo_teste:
+        description: 'Modo teste? (sim/nao)'
+        required: true
+        default: 'sim'
+        type: choice
+        options:
+          - sim
+          - nao
+  schedule:
+    - cron: '0 12,17,22 * * *' # 09h, 14h, 19h Brasil
+
+jobs:
+  post_perpetuo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          pip install instagrapi edge-tts moviepy==1.0.3 pillow
+
+      - name: TOP 3 VIRAIS INLINE
+        env:
+          IG_SESSIONID: ${{ secrets.IG_SESSIONID }}
+          FC_ID: ${{ vars.FC_ID || '15036334738' }}
+          MODO_TESTE: ${{ inputs.modo_teste || 'sim' }}
+        run: |
+          python - << 'PY'
           import os, time, subprocess, glob, asyncio, shutil, random
           from instagrapi import Client
           from instagrapi.exceptions import ClientThrottledError
-          SESSION_ID=os.getenv("IG_SESSIONID").strip()
+
+          SESSION_ID=os.getenv("IG_SESSIONID","").strip()
           MODO_TESTE=os.getenv("MODO_TESTE","sim")=="sim"
-          USER_ID=int(os.getenv("FC_ID"))
+          USER_ID=int(os.getenv("FC_ID","15036334738"))
+          
           print(f"MODO TESTE={MODO_TESTE} USER_ID={USER_ID}")
-          cl=Client(); cl.delay_range=[5,10]
+          cl=Client()
+          cl.delay_range=[5,10]
           cl.login_by_sessionid(SESSION_ID)
           print(f"Login OK como {cl.username}")
-          
-          # Anti-429: espera aleatória pro IP do GitHub desbugar
+
+          # ANTI-429: espera pra limpar IP do GitHub
           print("Esperando 90s pra limpar IP...")
           time.sleep(90)
 
           medias=None
           for i in range(5):
               try:
-                  # Tenta GQL primeiro que toma menos 429
+                  print(f"Tentativa {i+1}/5 - buscando com GQL...")
                   medias=cl.user_medias_gql(USER_ID, 20)
-                  if not medias: medias=cl.user_medias(USER_ID, 20)
+                  if not medias:
+                      medias=cl.user_medias(USER_ID, 20)
+                  print(f"Achei {len(medias)} posts")
                   break
               except ClientThrottledError:
                   w=600 + i*300 + random.randint(0,120)
                   print(f"429 tentativa {i+1}/5, esperando {w}s...")
                   time.sleep(w)
               except Exception as e:
-                  print(f"Erro {e}, tentando de novo")
+                  print(f"Erro {e}, tentando de novo em 60s")
                   time.sleep(60)
 
           if not medias:
               print("Ainda em 429 - SALVANDO VIDEO BACKUP LOCAL")
-              # cria video fake pra nao falhar o artifact
               subprocess.run(["ffmpeg","-y","-f","lavfi","-i","color=c=black:s=1080x1920:d=5","-vf","drawtext=text='AGUARDE 2H - IP BLOQUEADO':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2","/tmp/video_final.mp4"], check=True)
-              raise SystemExit(0)
+              exit(0)
+
+          # PEGA TOP 3 MAIS VISTOS
+          top = sorted(medias, key=lambda x: x.like_count + x.comment_count, reverse=True)[:3]
+          for idx,m in enumerate(top,1):
+              print(f"TOP {idx}: {m.code} - {m.like_count} likes")
+
+          # BAIXA O TOP 1
+          best = top[0]
+          path = cl.video_download(best.pk, folder="/tmp")
+          # renomeia pra video_final
+          final = "/tmp/video_final.mp4"
+          if os.path.exists(final): os.remove(final)
+          shutil.move(path, final)
+          print(f"Baixado {final}")
+
+          # AQUI ENTRA SUA PARTE DE DUBLAGEM / LEGENDA
+          # se MODO_TESTE==True só baixa, não posta
+          if MODO_TESTE:
+              print("MODO TESTE - só baixou, não vai postar")
+          else:
+              print("MODO PRODUCAO - aqui vai o codigo de postar")
+          PY
+
+      - name: Upload video teste
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-final
+          path: /tmp/video_final.mp4
+          if-no-files-found: warn
+
+      - uses: actions/checkout@v4
+        with:
+          clean: false
