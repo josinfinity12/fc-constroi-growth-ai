@@ -17,55 +17,57 @@ jobs:
           pip install instaloader moviepy openai whisper -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -qq
 
-      - name: 1. PUXA do @fc_constroi (FIX IP BLOQUEADO)
+      - name: 1. PUXA do @fc_constroi (FIX API DIRETA)
         env:
           IG_COOKIES: ${{ secrets.IG_COOKIES }}
         run: |
           printf "%s\n" "$IG_COOKIES" > /tmp/cookies.txt
-          echo "Linhas no cookies.txt:"
-          wc -l /tmp/cookies.txt
           cat > /tmp/baixar.py << 'PY'
-          import instaloader, http.cookiejar
-          L = instaloader.Instaloader(
-              dirname_pattern="/tmp/insta", 
-              filename_pattern="{shortcode}", 
-              download_pictures=False, 
-              download_video_thumbnails=False, 
-              download_geotags=False, 
-              download_comments=False, 
-              save_metadata=False
-          )
+          import instaloader, http.cookiejar, os
+          L = instaloader.Instaloader(dirname_pattern="/tmp/insta", filename_pattern="{shortcode}")
           cj = http.cookiejar.MozillaCookieJar("/tmp/cookies.txt")
           cj.load(ignore_discard=True, ignore_expires=True)
           print(f"Cookies carregados: {len(cj)}")
-
           csrf = ""
           for cookie in cj:
               if "instagram.com" in cookie.domain:
                   L.context._session.cookies.set(cookie.name, cookie.value, domain=cookie.domain)
-                  if cookie.name == "csrftoken":
+                  if cookie.name == "csrftoken": 
                       csrf = cookie.value
-                  if cookie.name == "sessionid":
-                      print(f"sessionid: {cookie.value[:12]}...")
-
           L.context._session.headers.update({
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0.0.0 Safari/537.36",
               "X-CSRFToken": csrf,
+              "X-IG-App-ID": "936619743392459",
               "Referer": "https://www.instagram.com/",
-              "X-IG-App-ID": "936619743392459"
+              "X-Requested-With": "XMLHttpRequest"
           })
-          
-          user = L.test_login()
-          print(f"Login OK como: {user}")
-          
-          profile = instaloader.Profile.from_username(L.context, "fc_constroi")
-          print(f"Perfil encontrado: {profile.username} - {profile.mediacount} posts")
-          
-          for post in profile.get_posts():
-              if post.is_video:
-                  print(f"Baixando video: {post.shortcode}")
-                  L.download_post(post, target="fc_constroi")
+          print(f"Login: {L.test_login()}")
+
+          sess = L.context._session
+          r = sess.get("https://i.instagram.com/api/v1/users/web_profile_info/?username=fc_constroi")
+          print(f"API status: {r.status_code}")
+          if r.status_code != 200:
+              print(r.text[:500])
+              exit(1)
+          data = r.json()
+          user_id = data['data']['user']['id']
+          print(f"User ID: {user_id}")
+
+          r2 = sess.get(f"https://i.instagram.com/api/v1/feed/user/{user_id}/?count=12")
+          posts = r2.json()['items']
+          video_shortcode = None
+          for item in posts:
+              if item.get('media_type') == 2 or item.get('product_type') == 'clips':
+                  video_shortcode = item['code']
+                  print(f"Achei video: {video_shortcode}")
                   break
+          
+          if not video_shortcode:
+              print("Nenhum video achado")
+              exit(1)
+
+          post = instaloader.Post.from_shortcode(L.context, video_shortcode)
+          L.download_post(post, target="fc_constroi")
           PY
           python /tmp/baixar.py
           ls -lh /tmp/insta/fc_constroi/
