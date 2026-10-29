@@ -17,26 +17,53 @@ jobs:
           pip install instaloader moviepy openai whisper -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -qq
 
-      - name: 1. PUXA do @fc_constroi (FIX 100%)
+      - name: 1. PUXA do @fc_constroi (FIX IP BLOQUEADO)
         env:
           IG_COOKIES: ${{ secrets.IG_COOKIES }}
         run: |
-          echo "$IG_COOKIES" > /tmp/cookies.txt
+          printf "%s\n" "$IG_COOKIES" > /tmp/cookies.txt
+          echo "Linhas no cookies.txt:"
+          wc -l /tmp/cookies.txt
           cat > /tmp/baixar.py << 'PY'
-          import instaloader, http.cookiejar, os
-          L = instaloader.Instaloader(dirname_pattern="/tmp/insta", filename_pattern="{shortcode}", download_pictures=False, download_video_thumbnails=False, download_geotags=False, download_comments=False, save_metadata=False, compress_json=False)
-          # Carrega cookies.txt do Netscape
+          import instaloader, http.cookiejar
+          L = instaloader.Instaloader(
+              dirname_pattern="/tmp/insta", 
+              filename_pattern="{shortcode}", 
+              download_pictures=False, 
+              download_video_thumbnails=False, 
+              download_geotags=False, 
+              download_comments=False, 
+              save_metadata=False
+          )
           cj = http.cookiejar.MozillaCookieJar("/tmp/cookies.txt")
           cj.load(ignore_discard=True, ignore_expires=True)
+          print(f"Cookies carregados: {len(cj)}")
+
+          csrf = ""
           for cookie in cj:
               if "instagram.com" in cookie.domain:
                   L.context._session.cookies.set(cookie.name, cookie.value, domain=cookie.domain)
-          print("Cookies carregados, tentando login test...")
-          print("Username logado:", L.test_login())
-          # Baixa ultimo post
+                  if cookie.name == "csrftoken":
+                      csrf = cookie.value
+                  if cookie.name == "sessionid":
+                      print(f"sessionid: {cookie.value[:12]}...")
+
+          L.context._session.headers.update({
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0.0.0 Safari/537.36",
+              "X-CSRFToken": csrf,
+              "Referer": "https://www.instagram.com/",
+              "X-IG-App-ID": "936619743392459"
+          })
+          
+          user = L.test_login()
+          print(f"Login OK como: {user}")
+          
           profile = instaloader.Profile.from_username(L.context, "fc_constroi")
+          print(f"Perfil encontrado: {profile.username} - {profile.mediacount} posts")
+          
           for post in profile.get_posts():
               if post.is_video:
+                  print(f"Baixando video: {post.shortcode}")
                   L.download_post(post, target="fc_constroi")
                   break
           PY
@@ -45,6 +72,7 @@ jobs:
           VIDEO=$(find /tmp/insta -name "*.mp4" | head -n 1)
           cp "$VIDEO" /tmp/original.mp4
           echo "Baixado: $VIDEO"
+          echo "VIDEO_PATH=/tmp/original.mp4" >> $GITHUB_ENV
 
       - name: 2. Dublagem + Legenda
         env:
@@ -56,19 +84,22 @@ jobs:
         env:
           IG_COOKIES_CONSTRUYE: ${{ secrets.IG_COOKIES_CONSTRUYE }}
         run: |
-          echo "$IG_COOKIES_CONSTRUYE" > /tmp/cookies_construye.txt
+          printf "%s\n" "$IG_COOKIES_CONSTRUYE" > /tmp/cookies_construye.txt
           python scripts/post_ig.py --cookies /tmp/cookies_construye.txt --video /tmp/processed_reel.mp4
 
       - name: 4. POSTA YouTube Shorts
         env:
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-        run: python scripts/post_yt.py --video /tmp/processed_reel.mp4
+        run: |
+          python scripts/post_yt.py --video /tmp/processed_reel.mp4
 
       - name: 5. POSTA TikTok + Facebook
         env:
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
           FB_COOKIES: ${{ secrets.FB_COOKIES }}
-        run: python scripts/post_tiktok_fb.py --video /tmp/processed_reel.mp4
+        run: |
+          python scripts/post_tiktok_fb.py --video /tmp/processed_reel.mp4
 
       - name: 6. KWAI - PENDENTE
-        run: echo "Kwai pendente"
+        run: |
+          echo "Kwai pendente"
