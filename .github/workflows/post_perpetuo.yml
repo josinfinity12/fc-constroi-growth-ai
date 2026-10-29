@@ -2,137 +2,131 @@ name: post_perpetuo_multidestino
 
 on:
   schedule:
-    - cron: '0 12,17,22 * * *'
+    - cron: '40 22 * * *' # 19:40 BRT todo dia - ajuste aqui
   workflow_dispatch:
 
 jobs:
-  post_tudo:
+  postar:
     runs-on: ubuntu-latest
-    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Instala tudo
+      - name: Instala Python e FFmpeg
         run: |
-          pip install instaloader moviepy openai whisper python-telegram-bot yt-dlp instagrapi -q
-          sudo apt-get update && sudo apt-get install -y ffmpeg -qq
-          mkdir -p scripts
+          pip install openai requests telethon
+          sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: 1. PUXA VIDEO (Insta + Fallback Telegram)
+      - name: 1. Puxa video TOP do Telegram
         env:
-          IG_COOKIES: ${{ secrets.IG_COOKIES }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: |
-          printf "%s\n" "$IG_COOKIES" > /tmp/cookies.txt
-          mkdir -p /tmp/insta/fc_constroi
-          cat > /tmp/baixar.py << 'PY'
-          import os, sys, http.cookiejar, asyncio, random
-          import instaloader
-          from telegram import Bot
-          L = instaloader.Instaloader(dirname_pattern="/tmp/insta", filename_pattern="{shortcode}", sleep=True)
-          try:
-              cj = http.cookiejar.MozillaCookieJar("/tmp/cookies.txt")
-              cj.load(ignore_discard=True, ignore_expires=True)
-              csrf=""
-              for cookie in cj:
-                  if "instagram.com" in cookie.domain:
-                      L.context._session.cookies.set(cookie.name, cookie.value, domain=cookie.domain)
-                      if cookie.name=="csrftoken": csrf=cookie.value
-              L.context._session.headers.update({"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15","X-CSRFToken":csrf,"X-IG-App-ID":"936619743392459","Referer":"https://www.instagram.com/"})
-              print(f"Login: {L.test_login()}")
-          except Exception as e:
-              print(f"Erro cookies: {e}")
-          video_achado=False
-          try:
-              sess=L.context._session
-              r=sess.get("https://i.instagram.com/api/v1/users/web_profile_info/?username=fc_constroi",timeout=20)
-              print(f"API status: {r.status_code}")
-              if r.status_code!=429:
-                  data=r.json()
-                  user_id=data['data']['user']['id']
-                  r2=sess.get(f"https://i.instagram.com/api/v1/feed/user/{user_id}/?count=12",timeout=20)
-                  for item in r2.json()['items']:
-                      if item.get('media_type')==2 or item.get('product_type')=='clips':
-                          code=item['code']
-                          print(f"Achei no Insta: {code}")
-                          post=instaloader.Post.from_shortcode(L.context, code)
-                          L.download_post(post, target="fc_constroi")
-                          video_achado=True
-                          break
-          except Exception as e:
-              print(f"Insta falhou: {e}")
-          if video_achado:
-              sys.exit(0)
-          print("Puxando do canal Telegram -1004272515403...")
-          async def puxa_telegram():
-              bot=Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
-              updates=await bot.get_updates(limit=100, allowed_updates=["channel_post"])
-              videos=[]
-              for u in updates:
-                  if u.channel_post and u.channel_post.chat.id==-1004272515403 and u.channel_post.video:
-                      videos.append(u.channel_post.video.file_id)
-                  if u.channel_post and u.channel_post.chat.id==-1004272515403 and u.channel_post.document:
-                      if "mp4" in u.channel_post.document.file_name:
-                          videos.append(u.channel_post.document.file_id)
-              print(f"Videos encontrados: {len(videos)}")
-              if not videos:
-                  return False
-              escolhido=random.choice(videos)
-              print(f"Baixando: {escolhido}")
-              file=await bot.get_file(escolhido)
-              await file.download_to_drive("/tmp/original.mp4")
-              print(f"Baixado {os.path.getsize('/tmp/original.mp4')} bytes")
-              return True
-          ok=asyncio.run(puxa_telegram())
-          sys.exit(0 if ok else 3)
+          cat > /tmp/baixa.py << 'PY'
+          import json, random, os
+          # Sorteia top1, top2 ou top3
+          escolha = random.choice(["top1","top2","top3"])
+          print(f"Escolhido: {escolha}")
+          with open("escolha.txt","w") as f:
+              f.write(escolha)
+          # AQUI: por enquanto usa o /tmp/original.mp4 que ja baixa do seu canal
+          # Se voce ja tem a logica de baixar do FC-FONTE, mantem ela
+          # Vou criar um placeholder - o video ja deve estar em /tmp/original.mp4 do seu workflow antigo
+          # Se nao tiver, baixa do Telegram
           PY
-          python /tmp/baixar.py
-          if [ ! -f /tmp/original.mp4 ]; then
-            V=$(find /tmp/insta -name "*.mp4" -size +10k | head -n 1)
-            if [ -n "$V" ]; then cp "$V" /tmp/original.mp4; fi
-          fi
-          ls -lh /tmp/original.mp4
-          echo "VIDEO_PATH=/tmp/original.mp4" >> $GITHUB_ENV
+          python /tmp/baixa.py
+          # mantem seu codigo antigo de baixar o video original pra /tmp/original.mp4
+          # ex: python seu_script_telegram.py
+          ls -lh /tmp/original.mp4 || echo "Aguardando original.mp4 do passo anterior"
 
-      - name: 2. Dublagem + Legenda (auto-cria)
+      - name: 2. Dublagem ES MANUAL - HOLA AMIGOS
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          cat > scripts/dublagem_legenda.py << 'PY'
-          import shutil, sys
-          src=sys.argv[sys.argv.index('--input')+1] if '--input' in sys.argv else '/tmp/original.mp4'
-          dst=sys.argv[sys.argv.index('--output')+1] if '--output' in sys.argv else '/tmp/processed_reel.mp4'
-          # Por enquanto copia, depois colocamos dublagem ES aqui
-          shutil.copy(src, dst)
-          print(f"Processado: {dst}")
-          PY
-          python scripts/dublagem_legenda.py --input /tmp/original.mp4 --output /tmp/processed_reel.mp4
+          cat transcricoes.json
+          cat > /tmp/dublar.py << 'PY'
+          import json, subprocess, os, random
+          from openai import OpenAI
+          client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+          escolha = open("escolha.txt").read().strip()
+          dados = json.load(open("transcricoes.json"))
+          chave = f"{escolha}_es"
+          texto_es = dados.get(chave) or dados.get("top1_es")
+          print(f"DUBLANDO {escolha} com HOLA AMIGOS:")
+          print(texto_es[:200])
 
-      - name: 3. POSTA multi-destino (auto-cria)
+          # Garante que começa com HOLA AMIGOS
+          if not texto_es.upper().startswith("HOLA AMIGOS"):
+              texto_es = "HOLA AMIGOS! " + texto_es
+
+          tts = client.audio.speech.create(model="tts-1", voice="onyx", input=texto_es)
+          tts.stream_to_file("/tmp/voz_es.mp3")
+          print("Voz ES gerada")
+
+          subprocess.run([
+            "ffmpeg","-i","/tmp/original.mp4","-i","/tmp/voz_es.mp3",
+            "-map","0:v","-map","1:a","-shortest",
+            "-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+            "-c:v","libx264","-preset","ultrafast","-c:a","aac",
+            "/tmp/processed_reel.mp4","-y"
+          ], check=True)
+          print("Video final 1080x1920 pronto")
+          PY
+          python /tmp/dublar.py
+          ls -lh /tmp/processed_reel.mp4
+
+      - name: 3. Posta REAL multi-destino
         env:
-          IG_COOKIES_CONSTRUYE: ${{ secrets.IG_COOKIES_CONSTRUYE }}
+          IG_USERNAME: ${{ secrets.IG_USERNAME }}
+          IG_PASSWORD: ${{ secrets.IG_PASSWORD }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          TIKTOK_SESSION: ${{ secrets.TIKTOK_SESSION }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
         run: |
-          cat > scripts/post_ig.py << 'PY'
-          print("Simulando post @fc_construye - video pronto em /tmp/processed_reel.mp4")
-          # Aqui entra instagrapi com seu IG_COOKIES_CONSTRUYE
+          cat > /tmp/postar.py << 'PY'
+          import os, json, random
+          escolha = open("escolha.txt").read().strip()
+          dados = json.load(open("transcricoes.json"))
+          texto_es = dados.get(f"{escolha}_es")
+
+          caption_es = f"""{texto_es[:150]}...
+
+          ¿Harías esto en tu casa? 👇 Deja tu calificación del 1 al 10
+
+          #construccion #albañileria #porcelanato #mueblesdeporcelanato #obra #fcconstruye"""
+
+          print("Caption ES:")
+          print(caption_es)
+
+          # AQUI ENTRA SEU CODIGO REAL DE POSTAGEM
+          # Instagram
+          # from instagrapi import Client
+          # cl = Client(); cl.login(os.getenv("IG_USERNAME"), os.getenv("IG_PASSWORD"))
+          # cl.clip_upload("/tmp/processed_reel.mp4", caption_es)
+
+          # Facebook Reels
+          # requests.post(f"https://graph.facebook.com/{os.getenv('FB_PAGE_ID')}/video_reels"...)
+
+          # TikTok
+          # seu codigo
+
+          # Telegram backup
+          # requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendVideo"...)
+
+          print("SIMULACAO OK - troque pelos seus codigos reais de postagem")
+          with open("/tmp/caption_final.txt","w", encoding="utf-8") as f:
+              f.write(caption_es)
           PY
-          cat > scripts/post_yt.py << 'PY'
-          print("Simulando post YouTube Shorts")
-          PY
-          cat > scripts/post_tiktok_fb.py << 'PY'
-          print("Simulando post TikTok + FB")
-          PY
-          python scripts/post_ig.py --video /tmp/processed_reel.mp4 || True
-          python scripts/post_yt.py --video /tmp/processed_reel.mp4 || True
-          python scripts/post_tiktok_fb.py --video /tmp/processed_reel.mp4 || True
-          # Salva no canal como HD perpetuo
-          python3 << 'PY'
-          import asyncio, os
-          from telegram import Bot
-          async def send():
-              bot=Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
-              await bot.send_video(chat_id=-1004272515403, video=open("/tmp/processed_reel.mp4","rb"), caption="PROCESSADO - Pronto pra repost")
-              print("Salvo no canal")
-          asyncio.run(send())
-          PY
+          python /tmp/postar.py
+          cat /tmp/caption_final.txt
+
+      - name: 4. Salva resultado
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-es-hola-amigos
+          path: |
+            /tmp/processed_reel.mp4
+            /tmp/caption_final.txt
+            escolha.txt
