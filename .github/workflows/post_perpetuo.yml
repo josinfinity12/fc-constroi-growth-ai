@@ -1,6 +1,17 @@
 name: post_perpetuo
 on:
   workflow_dispatch:
+    inputs:
+      modo_teste:
+        description: 'Modo teste? (sim/nao)'
+        required: true
+        default: 'sim'
+        type: choice
+        options:
+          - sim
+          - nao
+  schedule:
+    - cron: '0 12,17,22 * * *'
 jobs:
   post_perpetuo:
     runs-on: ubuntu-latest
@@ -38,17 +49,14 @@ jobs:
           base = to_916(base_clip)
           print(f"DURACAO TOTAL: {base.duration:.1f}s")
 
-          # 1. EXTRAI AUDIO
           subprocess.run(["ffmpeg","-y","-i",base_path,"-vn","-acodec","mp3","/tmp/original.mp3"], check=True)
 
-          # 2. TRANSCREVE AUTOMATICO LEVE
           print("Transcrevendo automaticamente...")
           model = WhisperModel("small", device="cpu", compute_type="int8")
           segments, info = model.transcribe("/tmp/original.mp3", language="pt")
           texto_original = " ".join([s.text for s in segments])
           print(f"VOCE FALOU ORIGINAL: {texto_original}")
 
-          # 3. DUBLA EM ESPANHOL FIEL AO QUE VC FALOU
           async def ga():
               await edge_tts.Communicate(texto_original,"es-MX-JorgeNeural",rate="-5%").save("/tmp/audio_es.mp3")
           asyncio.run(ga())
