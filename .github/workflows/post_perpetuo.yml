@@ -2,7 +2,7 @@ name: post_perpetuo_multidestino
 
 on:
   schedule:
-    - cron: '0 12,17,22 * * *' # 09:00, 14:00, 19:00 Bahia
+    - cron: '0 12,17,22 * * *'
   workflow_dispatch:
 
 jobs:
@@ -10,31 +10,27 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Set up job
-        run: echo "Iniciando..."
-
       - uses: actions/checkout@v4
 
       - name: Instala tudo
         run: |
-          pip install instaloader yt-dlp moviepy openai whisper -q
+          pip install yt-dlp moviepy openai whisper browser-cookie3 -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -qq
 
-      - name: 1. PUXA do @fc_constroi (FONTE)
+      - name: 1. PUXA do @fc_constroi (FONTE) - FIX DEFINITIVO
         env:
           IG_COOKIES: ${{ secrets.IG_COOKIES }}
         run: |
           echo "$IG_COOKIES" > /tmp/cookies.txt
           mkdir -p /tmp/insta
-          instaloader --cookies /tmp/cookies.txt \
-            --no-captions --no-metadata-json --no-video-thumbnails --no-compress-json \
-            --dirname-pattern /tmp/insta --filename-pattern "{shortcode}" \
-            --count 1 --no-pictures --no-profile-pic \
-            fc_constroi
+          # Pega o ultimo reel do perfil usando yt-dlp que aceita cookies.txt
+          yt-dlp --cookies /tmp/cookies.txt -o "/tmp/insta/%(id)s.%(ext)s" --no-playlist --max-downloads 1 "https://www.instagram.com/fc_constroi/reels/" || \
+          yt-dlp --cookies /tmp/cookies.txt -o "/tmp/insta/%(id)s.%(ext)s" --no-playlist --max-downloads 1 "https://www.instagram.com/fc_constroi/"
           ls -lh /tmp/insta/
-          VIDEO=$(find /tmp/insta -type f -name "*.mp4" | head -n 1)
-          echo "VIDEO_PATH=$VIDEO" >> $GITHUB_ENV
+          VIDEO=$(find /tmp/insta -type f | head -n 1)
+          echo "VIDEO_PATH=$VIDEO"
           cp "$VIDEO" /tmp/original.mp4
+          echo "VIDEO_PATH=/tmp/original.mp4" >> $GITHUB_ENV
 
       - name: 2. Dublagem + Legenda Poppins Amarela
         env:
@@ -47,7 +43,7 @@ jobs:
           IG_COOKIES_CONSTRUYE: ${{ secrets.IG_COOKIES_CONSTRUYE }}
         run: |
           echo "$IG_COOKIES_CONSTRUYE" > /tmp/cookies_construye.txt
-          python scripts/post_ig.py --cookies /tmp/cookies_construye.txt --video /tmp/processed_reel.mp4 --caption "Novo hack de obra! 👷‍♂️ #construccion #obra"
+          python scripts/post_ig.py --cookies /tmp/cookies_construye.txt --video /tmp/processed_reel.mp4
 
       - name: 4. POSTA YouTube Shorts
         env:
@@ -63,8 +59,4 @@ jobs:
           python scripts/post_tiktok_fb.py --video /tmp/processed_reel.mp4
 
       - name: 6. KWAI - PENDENTE
-        run: |
-          echo "Kwai pendente - salvar API depois"
-
-      - name: Post Run actions/checkout@v4
-        run: echo "Limpando /tmp"
+        run: echo "Kwai pendente"
