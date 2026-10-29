@@ -24,14 +24,14 @@ jobs:
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
           pip install Pillow edge-tts moviepy==1.0.3 --no-cache-dir
           mkdir -p /tmp
-      - name: DUBLA SINCRONIZADA 100% PASSO A PASSO 60px EXTRA BOLD
+      - name: DUBLA SYNC 100% FIX ANTI NO AUDIO 60px EXTRA BOLD
         env:
           IMAGEMAGICK_BINARY: /usr/bin/convert
         run: |
           python - << 'PY'
           import PIL.Image
           if not hasattr(PIL.Image, 'ANTIALIAS'): PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
-          import os, glob, asyncio, subprocess, re, json
+          import os, asyncio, subprocess, re, json, time, textwrap
           from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
           import edge_tts
 
@@ -40,65 +40,56 @@ jobs:
               c=c.resize(height=1920)
               return c.crop(width=1080,height=1920,x_center=c.w/2,y_center=c.h/2) if c.w>1080 else c.on_color(size=(1080,1920),color=(0,0,0),pos=('center','center'))
 
-          clip_orig = VideoFileClip(base_path)
-          base = to_916(clip_orig)
+          base = to_916(VideoFileClip(base_path))
           video_dur = base.duration
-          print(f"VIDEO DUR: {video_dur}")
+          print(f"VIDEO: {video_dur}")
 
-          texto_es = """¡Hola equipo! Hoy les traigo el paso a paso, un video más explicativo de cómo se hizo este proyecto del gabinete. Muchos me preguntaron cómo se hizo, qué técnica se usó, qué material, qué pegamento. Miren, los productos que usé fueron sobras de piso de la misma obra que estaba haciendo en este baño. Utilicé varillas de hierro, las amarré bien, después hice un concreto bien fuerte. Usé masilla plástica para pegar esos bordes para que el concreto no se escurriera. Todo de piso. Después corté las piezas al tamaño exacto, porque la clienta quería aprovechar este lavamanos, que como ven sigue en su lugar, no lo removí. Fui levantando todo el gabinete alrededor de él, sin quitarlo, solo desconecté el agua y el desagüe. Y ahí hice el montaje de acuerdo al tamaño del espacio. No hubo un material específico, simplemente piso, pegamento y varilla. ¡Vamos a escalar este perfil hasta la luna! Gracias, hasta la próxima."""
+          texto_es = "Hola equipo! Hoy les traigo el paso a paso de como se hizo este proyecto del gabinete. Muchos me preguntaron que tecnica se uso. Los productos que use fueron sobras de piso de la misma obra. Use varillas de hierro, las amarre bien. Despues hice un concreto bien fuerte. Use masilla plastica para los bordes. Todo de piso. Corte las piezas al tamano exacto. La clienta queria aprovechar el lavamanos que sigue en su lugar, no lo removi. Fui levantando el gabinete alrededor de el, solo desconecte el agua y el desague. Hice el montaje de acuerdo al espacio. No hubo material especifico, simplemente piso, pegamento y varilla. Vamos a escalar este perfil hasta la luna! Gracias, hasta la proxima."
 
-          frases = re.split(r'(?<=[.!?])\s+', texto_es)
+          # QUEBRA EM 120 CARACTERES MAX - ANTI NO AUDIO
+          chunks = textwrap.wrap(texto_es, width=120, break_long_words=False)
+          print(f"CHUNKS: {len(chunks)}")
 
           async def gerar():
               audios=[]
-              for i,f in enumerate(frases):
-                  if not f.strip(): continue
-                  p=f"/tmp/c{i}.mp3"
-                  await edge_tts.Communicate(f,"es-MX-JorgeNeural",rate="-6%").save(p)
-                  audios.append(p)
+              for i, txt in enumerate(chunks):
+                  txt = txt.strip()
+                  if not txt: continue
+                  p = f"/tmp/c{i}.mp3"
+                  for tentativa in range(3):
+                      try:
+                          # sem rate pra nao dar erro, voz mais estavel
+                          await edge_tts.Communicate(txt, "es-MX-JorgeNeural").save(p)
+                          # verifica se gerou
+                          if os.path.getsize(p) > 1000:
+                              audios.append(p)
+                              print(f"OK {i}: {txt[:30]}")
+                              break
+                      except Exception as e:
+                          print(f"Tentativa {tentativa} falhou {i}: {e}")
+                          await asyncio.sleep(1 + tentativa)
+                  await asyncio.sleep(0.8)  # delay anti rate limit
+              # concat
               with open("/tmp/lista.txt","w") as l:
                   for a in audios: l.write(f"file '{a}'\n")
               subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i","/tmp/lista.txt","-c","copy","/tmp/audio_raw.mp3"], check=True)
 
           asyncio.run(gerar())
 
-          # pega duração do áudio
+          # pega duração e sincroniza 100%
           r=subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","json","/tmp/audio_raw.mp3"], capture_output=True, text=True)
           audio_dur=float(json.loads(r.stdout)['format']['duration'])
-          print(f"AUDIO DUR: {audio_dur}")
-
-          # calcula fator pra sincronizar 100% - estica áudio pra durar igual vídeo
-          # se áudio 50s video 73s, atempo = 50/73 = 0.68 (deixa mais lento e cobre tudo)
-          fator = audio_dur / video_dur
-          # limita entre 0.5 e 2.0 pra não ficar robótico
-          fator = max(0.5, min(fator, 1.5))
-          print(f"FATor atempo: {fator}")
-
-          # ffmpeg atempo só aceita 0.5-2.0, se precisar faz 2x
+          fator = max(0.5, min(audio_dur / video_dur, 1.8))
+          print(f"SYNC fator {fator} audio {audio_dur} -> video {video_dur}")
           subprocess.run(["ffmpeg","-y","-i","/tmp/audio_raw.mp3","-filter:a",f"atempo={fator}","/tmp/audio_sync.mp3"], check=True)
 
-          # agora pega nova duração sincronizada
-          r2=subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","json","/tmp/audio_sync.mp3"], capture_output=True, text=True)
-          final_audio_dur=float(json.loads(r2.stdout)['format']['duration'])
-          print(f"AUDIO SYNC DUR: {final_audio_dur}")
-
-          # video tem que ter mesma duração do áudio sincronizado
           titulo = TextClip("GABINETE HECHO CON SOBRAS DE PISO", font="Montserrat-ExtraBold", fontsize=60, color="#FFD800", stroke_color="black", stroke_width=7, method="caption", size=(950,None))
-          titulo = titulo.set_position(("center","center")).set_duration(final_audio_dur)
+          titulo = titulo.set_position(("center","center")).set_duration(video_dur)
 
-          # se vídeo for menor que áudio, faz loop, se maior corta
-          if video_dur < final_audio_dur:
-              base_loop = base.loop(duration=final_audio_dur)
-              final_clip = CompositeVideoClip([base_loop,titulo]).set_duration(final_audio_dur)
-          else:
-              base_cut = base.subclip(0, final_audio_dur)
-              final_clip = CompositeVideoClip([base_cut,titulo]).set_duration(final_audio_dur)
-
-          final_clip.write_videofile("/tmp/temp_b.mp4",codec="libx264",fps=30,audio=False,threads=2)
-          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_sync.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-TOP1-SYNC-60px.mp4"],check=True)
-          print("SYNC 100% OK")
+          CompositeVideoClip([base,titulo]).set_duration(video_dur).write_videofile("/tmp/temp_b.mp4",codec="libx264",fps=30,audio=False,threads=2)
+          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_sync.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-TOP1-SYNC-FINAL-60px.mp4"],check=True)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: top1-sync-total
-          path: /tmp/B-TOP1-SYNC-60px.mp4
+          name: top1-sync-final
+          path: /tmp/B-TOP1-SYNC-FINAL-60px.mp4
