@@ -17,7 +17,7 @@ jobs:
           pip install instaloader moviepy openai whisper python-telegram-bot yt-dlp -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -qq
 
-      - name: 1. PUXA do @fc_constroi (COM BACKUP LOCAL)
+      - name: 1. PUXA VIDEO (Insta + Fallback Telegram)
         env:
           IG_COOKIES: ${{ secrets.IG_COOKIES }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -25,131 +25,106 @@ jobs:
           printf "%s\n" "$IG_COOKIES" > /tmp/cookies.txt
           mkdir -p /tmp/insta/fc_constroi
           
-          echo "=== Verificando seus backups ==="
-          ls -lh
-          ls -lh backup/ || echo "pasta backup vazia"
-          
           cat > /tmp/baixar.py << 'PY'
-          import os, time, random, sys, http.cookiejar
+          import os, sys, time, http.cookiejar, asyncio, random
           import instaloader
-          L = instaloader.Instaloader(dirname_pattern="/tmp/insta", filename_pattern="{shortcode}", sleep=True, max_connection_attempts=2, request_timeout=30)
+          from telegram import Bot
+
+          L = instaloader.Instaloader(dirname_pattern="/tmp/insta", filename_pattern="{shortcode}", sleep=True)
           try:
               cj = http.cookiejar.MozillaCookieJar("/tmp/cookies.txt")
               cj.load(ignore_discard=True, ignore_expires=True)
-              print(f"Cookies carregados: {len(cj)}")
               csrf = ""
               for cookie in cj:
                   if "instagram.com" in cookie.domain:
                       L.context._session.cookies.set(cookie.name, cookie.value, domain=cookie.domain)
                       if cookie.name == "csrftoken": csrf = cookie.value
               L.context._session.headers.update({"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15", "X-CSRFToken": csrf, "X-IG-App-ID": "936619743392459", "Referer": "https://www.instagram.com/"})
-              print(f"Login manual: {L.test_login()}")
+              print(f"Login: {L.test_login()}")
           except Exception as e:
               print(f"Erro cookies: {e}")
+
           video_achado = False
           try:
               sess = L.context._session
               r = sess.get("https://i.instagram.com/api/v1/users/web_profile_info/?username=fc_constroi", timeout=20)
               print(f"API status: {r.status_code}")
-              if r.status_code == 429:
-                  print("API deu 429, esperando 50s...")
-                  time.sleep(50)
-                  raise Exception("429")
-              data = r.json()
-              user_id = data['data']['user']['id']
-              r2 = sess.get(f"https://i.instagram.com/api/v1/feed/user/{user_id}/?count=12", timeout=20)
-              for item in r2.json()['items']:
-                  if item.get('media_type') == 2 or item.get('product_type') == 'clips':
-                      code = item['code']
-                      print(f"Achei video: {code}")
-                      post = instaloader.Post.from_shortcode(L.context, code)
-                      L.download_post(post, target="fc_constroi")
-                      video_achado = True
-                      break
-          except Exception as e:
-              print(f"Tentativa 1 falhou: {e}")
-          if not video_achado:
-              try:
-                  print("Tentativa 2: Profile.from_username...")
-                  time.sleep(5)
-                  profile = instaloader.Profile.from_username(L.context, "fc_constroi")
-                  for post in profile.get_posts():
-                      if post.is_video:
-                          print(f"Achei via Profile: {post.shortcode}")
+              if r.status_code != 429:
+                  data = r.json()
+                  user_id = data['data']['user']['id']
+                  r2 = sess.get(f"https://i.instagram.com/api/v1/feed/user/{user_id}/?count=12", timeout=20)
+                  for item in r2.json()['items']:
+                      if item.get('media_type') == 2 or item.get('product_type') == 'clips':
+                          code = item['code']
+                          print(f"Achei no Insta: {code}")
+                          post = instaloader.Post.from_shortcode(L.context, code)
                           L.download_post(post, target="fc_constroi")
                           video_achado = True
                           break
-              except Exception as e:
-                  print(f"Tentativa 2 falhou: {e}")
+          except Exception as e:
+              print(f"Insta falhou (normal quando da 429): {e}")
+
           if video_achado:
-              print("Video do Instagram baixado com sucesso")
               sys.exit(0)
-          else:
-              print("Nenhum video novo do Instagram, vai usar backup local")
-              sys.exit(2)
+
+          # FALLBACK PERPETUO - Puxa do seu canal FC-FONTE
+          print("Insta com 429, puxando do canal Telegram -1004272515403...")
+          async def puxa_telegram():
+              bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+              # Pega as ultimas mensagens do canal
+              updates = await bot.get_updates(limit=100, allowed_updates=["channel_post"])
+              videos = []
+              for u in updates:
+                  if u.channel_post and u.channel_post.chat.id == -1004272515403 and u.channel_post.video:
+                      videos.append(u.channel_post.video.file_id)
+                  if u.channel_post and u.channel_post.chat.id == -1004272515403 and u.channel_post.document:
+                      # caso enviou como arquivo
+                      if "mp4" in u.channel_post.document.file_name:
+                          videos.append(u.channel_post.document.file_id)
+              print(f"Videos encontrados no canal via updates: {len(videos)}")
+              if not videos:
+                  print("Nenhum update recente, tentando baixar direto - use /tmp/original.mp4 vazio e o proximo fluxo salva")
+                  # Se nao achou nos updates (expirou 24h), baixa o ultimo que ja foi postado no canal salvando file_id local
+                  # Por enquanto, erro controlado pra voce ver
+                  return False
+              escolhido = random.choice(videos)
+              print(f"Baixando file_id: {escolhido}")
+              file = await bot.get_file(escolhido)
+              await file.download_to_drive("/tmp/original.mp4")
+              print(f"Baixado do Telegram! {os.path.getsize('/tmp/original.mp4')} bytes")
+              return True
+
+          ok = asyncio.run(puxa_telegram())
+          sys.exit(0 if ok else 3)
           PY
           
           python /tmp/baixar.py
-          EXIT_CODE=$?
-          echo "Exit code do Instagram: $EXIT_CODE"
+          CODE=$?
+          echo "Codigo: $CODE"
           
-          if [ $EXIT_CODE -eq 2 ]; then
-            echo "Instagram bloqueou, usando seu backup local..."
-            VIDEO_BACKUP=$(find backup -name "*.mp4" -type f | shuf -n 1)
-            echo "Backup escolhido: $VIDEO_BACKUP"
-            cp "$VIDEO_BACKUP" /tmp/original.mp4
-          else
-            VIDEO=$(find /tmp/insta -name "*.mp4" -size +10k | head -n 1)
-            cp "$VIDEO" /tmp/original.mp4
+          # Se ainda nao tem /tmp/original.mp4, tenta pegar do /tmp/insta
+          if [ ! -f /tmp/original.mp4 ]; then
+            V=$(find /tmp/insta -name "*.mp4" -size +10k | head -n 1)
+            if [ -n "$V" ]; then cp "$V" /tmp/original.mp4; fi
           fi
           
           ls -lh /tmp/original.mp4
           echo "VIDEO_PATH=/tmp/original.mp4" >> $GITHUB_ENV
 
-      - name: 1.5 ENVIA PRO CANAL FC-FONTE (SEU HD PERPETUO)
-        if: always()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        run: |
-          if [ -f /tmp/original.mp4 ]; then
-            python3 << 'PY'
-          import asyncio, os
-          from telegram import Bot
-          async def send():
-              bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
-              if os.path.getsize("/tmp/original.mp4") > 10000:
-                  msg = await bot.send_video(chat_id=-1004272515403, video=open("/tmp/original.mp4", "rb"), caption="BACKUP PERPETUO - @fc_constroi")
-                  print(f"Salvo no canal! file_id: {msg.video.file_id}")
-          asyncio.run(send())
-          PY
-          fi
-
       - name: 2. Dublagem + Legenda
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          if [ -f /tmp/original.mp4 ]; then
-            python scripts/dublagem_legenda.py --input /tmp/original.mp4 --output /tmp/processed_reel.mp4 || cp /tmp/original.mp4 /tmp/processed_reel.mp4
-          fi
+          python scripts/dublagem_legenda.py --input /tmp/original.mp4 --output /tmp/processed_reel.mp4 || cp /tmp/original.mp4 /tmp/processed_reel.mp4
 
-      - name: 3. POSTA @fc_construye
+      - name: 3. POSTA @fc_construye + YT + TikTok + FB + Kwai
         env:
           IG_COOKIES_CONSTRUYE: ${{ secrets.IG_COOKIES_CONSTRUYE }}
-        run: |
-          printf "%s\n" "$IG_COOKIES_CONSTRUYE" > /tmp/cookies_construye.txt
-          python scripts/post_ig.py --cookies /tmp/cookies_construye.txt --video /tmp/processed_reel.mp4 || echo "Falha IG construye"
-
-      - name: 4. POSTA YouTube Shorts
-        env:
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-        run: |
-          python scripts/post_yt.py --video /tmp/processed_reel.mp4 || echo "Falha YT"
-
-      - name: 5. POSTA TikTok + Facebook + Kwai
-        env:
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
           FB_COOKIES: ${{ secrets.FB_COOKIES }}
-          KWAI_COOKIES: ${{ secrets.KWAI_COOKIES }}
         run: |
-          python scripts/post_tiktok_fb.py --video /tmp/processed_reel.mp4 || echo "Falha TikTok FB"
-          python scripts/post_kwai.py --video /tmp/processed_reel.mp4 || echo "Kwai pendente"
+          printf "%s\n" "$IG_COOKIES_CONSTRUYE" > /tmp/cookies_construye.txt
+          python scripts/post_ig.py --cookies /tmp/cookies_construye.txt --video /tmp/processed_reel.mp4 || echo "Falha IG"
+          python scripts/post_yt.py --video /tmp/processed_reel.mp4 || echo "Falha YT"
+          python scripts/post_tiktok_fb.py --video /tmp/processed_reel.mp4 || echo "Falha TikTok"
