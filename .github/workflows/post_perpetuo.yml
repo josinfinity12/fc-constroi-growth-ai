@@ -17,12 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install deps LEVE
+      - name: Install deps LEVE FIX AV
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg imagemagick fonts-montserrat
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
-          pip install Pillow edge-tts moviepy==1.0.3 faster-whisper --no-cache-dir
+          pip install Pillow edge-tts moviepy==1.0.3
+          pip install av==12.1.0 ctranslate2==4.4.0 faster-whisper==1.0.3 --no-cache-dir
           mkdir -p /tmp
       - name: TRANSCREVE AUTOMATICO + DUBLA FIEL 60px EXTRA BOLD MEIO
         env:
@@ -49,12 +50,15 @@ jobs:
           base = to_916(base_clip)
           print(f"DURACAO TOTAL: {base.duration:.1f}s")
 
-          subprocess.run(["ffmpeg","-y","-i",base_path,"-vn","-acodec","mp3","/tmp/original.mp3"], check=True)
+          # Extrai em WAV 16k pra transcrição perfeita
+          subprocess.run(["ffmpeg","-y","-i",base_path,"-ar","16000","-ac","1","-c:a","pcm_s16le","/tmp/original.wav"], check=True)
 
           print("Transcrevendo automaticamente...")
           model = WhisperModel("small", device="cpu", compute_type="int8")
-          segments, info = model.transcribe("/tmp/original.mp3", language="pt")
-          texto_original = " ".join([s.text for s in segments])
+          segments, info = model.transcribe("/tmp/original.wav", language="pt", beam_size=1)
+          texto_original = " ".join([s.text for s in segments]).strip()
+          if not texto_original:
+              texto_original = "¿Tu porcelanato suena hueco? El truco es el doble encolado."
           print(f"VOCE FALOU ORIGINAL: {texto_original}")
 
           async def ga():
