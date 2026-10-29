@@ -14,7 +14,7 @@ jobs:
 
       - name: Instala tudo
         run: |
-          pip install instaloader moviepy openai whisper -q
+          pip install instaloader moviepy openai whisper python-telegram-bot -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -qq
 
       - name: 1. PUXA do @fc_constroi (FIX API DIRETA)
@@ -42,7 +42,6 @@ jobs:
               "X-Requested-With": "XMLHttpRequest"
           })
           print(f"Login: {L.test_login()}")
-
           sess = L.context._session
           r = sess.get("https://i.instagram.com/api/v1/users/web_profile_info/?username=fc_constroi")
           print(f"API status: {r.status_code}")
@@ -52,7 +51,6 @@ jobs:
           data = r.json()
           user_id = data['data']['user']['id']
           print(f"User ID: {user_id}")
-
           r2 = sess.get(f"https://i.instagram.com/api/v1/feed/user/{user_id}/?count=12")
           posts = r2.json()['items']
           video_shortcode = None
@@ -61,11 +59,9 @@ jobs:
                   video_shortcode = item['code']
                   print(f"Achei video: {video_shortcode}")
                   break
-          
           if not video_shortcode:
               print("Nenhum video achado")
               exit(1)
-
           post = instaloader.Post.from_shortcode(L.context, video_shortcode)
           L.download_post(post, target="fc_constroi")
           PY
@@ -76,11 +72,52 @@ jobs:
           echo "Baixado: $VIDEO"
           echo "VIDEO_PATH=/tmp/original.mp4" >> $GITHUB_ENV
 
+      - name: 1.5 ENVIA PRO CANAL FC-FONTE (SEU HD PERPETUO)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          python3 << 'PY'
+          import asyncio
+          from telegram import Bot
+          import os
+          async def send():
+              bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+              # -1004272515403 é o ID do seu canal FC - FONTE
+              msg = await bot.send_video(
+                  chat_id=-1004272515403, 
+                  video=open("/tmp/original.mp4", "rb"),
+                  caption="ORIGINAL @fc_constroi - backup perpetuo"
+              )
+              print(f"Salvo no canal! file_id: {msg.video.file_id}")
+              # Salva o file_id pra usar nas 5 redes sem baixar de novo
+              with open("/tmp/telegram_file_id.txt", "w") as f:
+                  f.write(msg.video.file_id)
+          asyncio.run(send())
+          PY
+
       - name: 2. Dublagem + Legenda
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           python scripts/dublagem_legenda.py --input /tmp/original.mp4 --output /tmp/processed_reel.mp4
+
+      - name: 2.5 ENVIA PROCESSADO PRO CANAL TAMBEM
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          python3 << 'PY'
+          import asyncio, os
+          from telegram import Bot
+          async def send():
+              bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+              msg = await bot.send_video(
+                  chat_id=-1004272515403,
+                  video=open("/tmp/processed_reel.mp4", "rb"),
+                  caption="PROCESSADO - pronto pras 5 redes"
+              )
+              print(f"Processado salvo: {msg.video.file_id}")
+          asyncio.run(send())
+          PY
 
       - name: 3. POSTA @fc_construye
         env:
@@ -95,13 +132,11 @@ jobs:
         run: |
           python scripts/post_yt.py --video /tmp/processed_reel.mp4
 
-      - name: 5. POSTA TikTok + Facebook
+      - name: 5. POSTA TikTok + Facebook + Kwai
         env:
           TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
           FB_COOKIES: ${{ secrets.FB_COOKIES }}
+          KWAI_COOKIES: ${{ secrets.KWAI_COOKIES }}
         run: |
           python scripts/post_tiktok_fb.py --video /tmp/processed_reel.mp4
-
-      - name: 6. KWAI - PENDENTE
-        run: |
-          echo "Kwai pendente"
+          python scripts/post_kwai.py --video /tmp/processed_reel.mp4
