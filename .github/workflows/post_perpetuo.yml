@@ -1,24 +1,19 @@
 name: post_perpetuo
 on:
   workflow_dispatch:
-    inputs:
-      modo_teste:
-        description: 'Modo teste? (sim/nao)'
-        required: true
-        default: 'sim'
 jobs:
   post_perpetuo:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install deps
+      - name: Install deps LEVE
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg imagemagick fonts-montserrat
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
-          pip install Pillow edge-tts moviepy==1.0.3 openai-whisper
+          pip install Pillow edge-tts moviepy==1.0.3 faster-whisper --no-cache-dir
           mkdir -p /tmp
-      - name: DUBLAR O QUE VOCE REALMENTE FALA - 60px EXTRA BOLD MEIO
+      - name: TRANSCREVE AUTOMATICO + DUBLA FIEL 60px EXTRA BOLD MEIO
         env:
           IMAGEMAGICK_BINARY: /usr/bin/convert
         run: |
@@ -28,37 +23,12 @@ jobs:
           import os, glob, asyncio, subprocess, random
           from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
           import edge_tts
-          import whisper
+          from faster_whisper import WhisperModel
 
           videos = glob.glob("videos/*.mp4") + glob.glob("videos_brutos/*.mp4") + glob.glob("videos_es_final/*.mp4")
           videos = [v for v in videos if os.path.getsize(v) > 100000]
           base_path = random.choice(videos[:2])
           print(f"VIDEO: {base_path}")
-
-          # 1. EXTRAI AUDIO ORIGINAL
-          subprocess.run(["ffmpeg","-y","-i",base_path,"-vn","-acodec","mp3","/tmp/original.mp3"], check=True)
-
-          # 2. TRANSCREVE O QUE VC FALOU
-          print("Transcrevendo seu audio...")
-          model = whisper.load_model("small")
-          result = model.transcribe("/tmp/original.mp3", language="pt")
-          texto_original = result["text"]
-          print(f"VOCE FALOU: {texto_original}")
-
-          # 3. TRADUÇÃO SIMPLES PT -> ES (pra dublar igual)
-          # Se for pouco texto, usa ele mesmo traduzido via edge-tts que já traduz sotaque
-          # Vamos dublar exatamente o que você falou, mas em espanhol mexicano
-          texto_es = texto_original  # edge-tts vai falar em espanhol mesmo com texto PT, mas vamos limpar
-
-          # Se quiser tradução manual rápida, adiciona aqui suas frases mais usadas:
-          traducoes = {
-              "porcelanato": "porcelanato",
-              "suena hueco": "suena hueco",
-              "doble encolado": "doble encolado",
-              "argamassa": "mezcla",
-              "nivelado": "nivelado",
-              "cuña": "cuña"
-          }
 
           def to_916(c):
               c=c.resize(height=1920)
@@ -66,10 +36,20 @@ jobs:
 
           base_clip = VideoFileClip(base_path)
           base = to_916(base_clip)
+          print(f"DURACAO TOTAL: {base.duration:.1f}s")
 
-          # 4. DUBLA EM ESPANHOL COM O MESMO CONTEUDO
+          # 1. EXTRAI AUDIO
+          subprocess.run(["ffmpeg","-y","-i",base_path,"-vn","-acodec","mp3","/tmp/original.mp3"], check=True)
+
+          # 2. TRANSCREVE AUTOMATICO LEVE
+          print("Transcrevendo automaticamente...")
+          model = WhisperModel("small", device="cpu", compute_type="int8")
+          segments, info = model.transcribe("/tmp/original.mp3", language="pt")
+          texto_original = " ".join([s.text for s in segments])
+          print(f"VOCE FALOU ORIGINAL: {texto_original}")
+
+          # 3. DUBLA EM ESPANHOL FIEL AO QUE VC FALOU
           async def ga():
-              # Fala em espanhol mexicano exatamente o conteúdo transcrito
               await edge_tts.Communicate(texto_original,"es-MX-JorgeNeural",rate="-5%").save("/tmp/audio_es.mp3")
           asyncio.run(ga())
 
@@ -77,10 +57,10 @@ jobs:
           titulo = titulo.set_position(("center","center")).set_duration(base.duration)
 
           CompositeVideoClip([base,titulo]).set_duration(base.duration).write_videofile("/tmp/temp_b.mp4",codec="libx264",fps=30,audio=False,threads=2)
-          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_es.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-DUBLADO-FIEL-60px.mp4"],check=True)
-          print(f"FINAL: {base.duration:.1f}s - DUBLADO FIEL AO ORIGINAL")
+          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_es.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-AUTO-TRANSCRITO-60px.mp4"],check=True)
+          print("GERADO FIEL AO ORIGINAL")
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: dublado-fiel-original
-          path: /tmp/B-DUBLADO-FIEL-60px.mp4
+          name: auto-transcrito-dublado
+          path: /tmp/B-AUTO-TRANSCRITO-60px.mp4
