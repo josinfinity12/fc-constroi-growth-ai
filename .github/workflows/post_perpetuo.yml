@@ -10,8 +10,6 @@ on:
         options:
           - sim
           - nao
-  schedule:
-    - cron: '0 12,17,22 * * *'
 jobs:
   post_perpetuo:
     runs-on: ubuntu-latest
@@ -24,7 +22,7 @@ jobs:
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
           pip install Pillow edge-tts moviepy==1.0.3
           mkdir -p /tmp
-      - name: GERAR A/B #FFD800 - LOCAL 50px MEIO
+      - name: GERAR TEMPO COMPLETO DUBLADO 60px EXTRA BOLD
         env:
           IMAGEMAGICK_BINARY: /usr/bin/convert
         run: |
@@ -37,21 +35,37 @@ jobs:
           videos = glob.glob("videos/*.mp4") + glob.glob("videos_brutos/*.mp4") + glob.glob("videos_es_final/*.mp4")
           videos = [v for v in videos if os.path.getsize(v) > 100000]
           base_path = random.choice(videos[:2])
+          print(f"VIDEO: {base_path}")
+
           def to_916(c):
               c=c.resize(height=1920)
               return c.crop(width=1080,height=1920,x_center=c.w/2,y_center=c.h/2) if c.w>1080 else c.on_color(size=(1080,1920),color=(0,0,0),pos=('center','center'))
-          base=to_916(VideoFileClip(base_path).subclip(0,20))
-          base.write_videofile("/tmp/video_final.mp4",codec="libx264",audio_codec="aac",fps=30)
-          # B DUBLADO TITULO 50PX MEIO
-          async def ga(): await edge_tts.Communicate("¿Tu porcelanato suena hueco? El truco es el doble encolado.","es-MX-JorgeNeural",rate="-8%").save("/tmp/audio_es.mp3")
+
+          base_clip = VideoFileClip(base_path)
+          print(f"DURACAO ORIGINAL: {base_clip.duration:.1f}s - USANDO COMPLETA")
+          base = to_916(base_clip) # TEMPO COMPLETO - sem subclip
+
+          # Se o video for longo, texto tem que ser longo pra cobrir
+          dur = base.duration
+          if dur < 30:
+              texto = "¿Tu porcelanato suena hueco? El truco es el doble encolado. Aplica mezcla en el piso y en la pieza."
+          elif dur < 60:
+              texto = "¿Tu porcelanato suena hueco? Ese es el error número uno. El truco profesional es el doble encolado. Aplica mezcla en el piso y también en la pieza. Presiona firme y nivela."
+          else:
+              texto = "¿Tu porcelanato suena hueco? Ese es el error número uno de los maestros. El truco profesional es el doble encolado. Primero aplicas mezcla en el piso bien nivelado. Después aplicas mezcla también en la pieza. Presionas firme y nivelas con cuñas. Así no queda aire abajo. No suena hueco y nunca se despega. Este es el método que usan los profesionales para porcelanato de 60 por 60. Guarda este truco y sígueme para más tips de instalación de porcelanato."
+
+          async def ga():
+              await edge_tts.Communicate(texto,"es-MX-JorgeNeural",rate="-8%").save("/tmp/audio_es.mp3")
           asyncio.run(ga())
-          titulo=TextClip("¿TU PORCELANATO SUENA HUECO?",font="Montserrat-Bold",fontsize=50,color="#FFD800",stroke_color="black",stroke_width=5,method="caption",size=(950,None))
-          titulo=titulo.set_position(("center","center")).set_duration(base.duration)
+
+          titulo = TextClip("¿TU PORCELANATO SUENA HUECO?", font="Montserrat-ExtraBold", fontsize=60, color="#FFD800", stroke_color="black", stroke_width=7, method="caption", size=(950,None))
+          titulo = titulo.set_position(("center","center")).set_duration(base.duration)
+
           CompositeVideoClip([base,titulo]).set_duration(base.duration).write_videofile("/tmp/temp_b.mp4",codec="libx264",fps=30,audio=False,threads=2)
-          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_es.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-DUBLADO-titulo-50px.mp4"],check=True)
+          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_es.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-COMPLETO-DUBLADO-60px.mp4"],check=True)
+          print(f"FINAL: {dur:.1f}s - VIDEO COMPLETO")
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: teste-AB-natural
-          path: |
-            /tmp/*.mp4
+          name: video-completo-dublado
+          path: /tmp/B-COMPLETO-DUBLADO-60px.mp4
