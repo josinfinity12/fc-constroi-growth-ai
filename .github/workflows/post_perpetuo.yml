@@ -17,62 +17,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install deps LEVE FIX AV
+      - name: Install deps
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg imagemagick fonts-montserrat
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
-          pip install Pillow edge-tts moviepy==1.0.3
-          pip install av==12.1.0 ctranslate2==4.4.0 faster-whisper==1.0.3 --no-cache-dir
+          pip install Pillow edge-tts moviepy==1.0.3 --no-cache-dir
           mkdir -p /tmp
-      - name: TRANSCREVE AUTOMATICO + DUBLA FIEL 60px EXTRA BOLD MEIO
+      - name: DUBLA 100% FIEL TOP1 60px EXTRA BOLD MEIO
         env:
           IMAGEMAGICK_BINARY: /usr/bin/convert
         run: |
           python - << 'PY'
           import PIL.Image
           if not hasattr(PIL.Image, 'ANTIALIAS'): PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
-          import os, glob, asyncio, subprocess, random
+          import os, glob, asyncio, subprocess
           from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
           import edge_tts
-          from faster_whisper import WhisperModel
 
-          videos = glob.glob("videos/*.mp4") + glob.glob("videos_brutos/*.mp4") + glob.glob("videos_es_final/*.mp4")
-          videos = [v for v in videos if os.path.getsize(v) > 100000]
-          base_path = random.choice(videos[:2])
-          print(f"VIDEO: {base_path}")
-
+          base_path = "videos_brutos/top1.mp4"
           def to_916(c):
               c=c.resize(height=1920)
               return c.crop(width=1080,height=1920,x_center=c.w/2,y_center=c.h/2) if c.w>1080 else c.on_color(size=(1080,1920),color=(0,0,0),pos=('center','center'))
 
-          base_clip = VideoFileClip(base_path)
-          base = to_916(base_clip)
-          print(f"DURACAO TOTAL: {base.duration:.1f}s")
+          base = to_916(VideoFileClip(base_path))
+          print(f"DURACAO: {base.duration:.1f}s")
 
-          # Extrai em WAV 16k pra transcrição perfeita
-          subprocess.run(["ffmpeg","-y","-i",base_path,"-ar","16000","-ac","1","-c:a","pcm_s16le","/tmp/original.wav"], check=True)
-
-          print("Transcrevendo automaticamente...")
-          model = WhisperModel("small", device="cpu", compute_type="int8")
-          segments, info = model.transcribe("/tmp/original.wav", language="pt", beam_size=1)
-          texto_original = " ".join([s.text for s in segments]).strip()
-          if not texto_original:
-              texto_original = "¿Tu porcelanato suena hueco? El truco es el doble encolado."
-          print(f"VOCE FALOU ORIGINAL: {texto_original}")
+          # TEXTO 100% TRADUZIDO CERTO
+          texto_es = """¡Hola equipo! Hoy les traigo el paso a paso, un video más explicativo de cómo se hizo este proyecto del gabinete. Muchos me preguntaron cómo se hizo, qué técnica se usó, qué material, qué pegamento. Miren, los productos que usé fueron sobras de piso de la misma obra que estaba haciendo en este baño. Utilicé varillas de hierro, las amarré bien, después hice un concreto bien fuerte. Usé masilla plástica para pegar esos bordes para que el concreto no se escurriera. Todo de piso. Después corté las piezas al tamaño exacto, porque la clienta quería aprovechar este lavamanos, que como ven sigue en su lugar, no lo removí. Fui levantando todo el gabinete alrededor de él, sin quitarlo, solo desconecté el agua y el desagüe. Y ahí hice el montaje de acuerdo al tamaño del espacio. No hubo un material específico, simplemente piso, pegamento y varilla. ¡Vamos a escalar este perfil hasta la luna! Gracias, hasta la próxima."""
 
           async def ga():
-              await edge_tts.Communicate(texto_original,"es-MX-JorgeNeural",rate="-5%").save("/tmp/audio_es.mp3")
+              await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="-6%",volume="+10%").save("/tmp/audio_es.mp3")
           asyncio.run(ga())
 
-          titulo = TextClip("¿TU PORCELANATO SUENA HUECO?", font="Montserrat-ExtraBold", fontsize=60, color="#FFD800", stroke_color="black", stroke_width=7, method="caption", size=(950,None))
+          titulo = TextClip("GABINETE HECHO CON SOBRAS DE PISO", font="Montserrat-ExtraBold", fontsize=60, color="#FFD800", stroke_color="black", stroke_width=7, method="caption", size=(950,None))
           titulo = titulo.set_position(("center","center")).set_duration(base.duration)
 
           CompositeVideoClip([base,titulo]).set_duration(base.duration).write_videofile("/tmp/temp_b.mp4",codec="libx264",fps=30,audio=False,threads=2)
-          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_es.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-AUTO-TRANSCRITO-60px.mp4"],check=True)
-          print("GERADO FIEL AO ORIGINAL")
+          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_es.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-TOP1-100-FIEL-60px.mp4"],check=True)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: auto-transcrito-dublado
-          path: /tmp/B-AUTO-TRANSCRITO-60px.mp4
+          name: top1-100-fiel
+          path: /tmp/B-TOP1-100-FIEL-60px.mp4
