@@ -22,13 +22,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg imagemagick wget
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
-          # Baixa Poppins Bold oficial Google Fonts
           sudo mkdir -p /usr/share/fonts/truetype/poppins
-          sudo wget -O /usr/share/fonts/truetype/poppins/Poppins-Bold.ttf https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Bold.ttf
+          sudo wget -q -O /usr/share/fonts/truetype/poppins/Poppins-Bold.ttf https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Bold.ttf
           sudo fc-cache -f
           pip install Pillow edge-tts moviepy==1.0.3 --no-cache-dir
           mkdir -p /tmp
-      - name: POPPINS BOLD 60px BORDA 1px + DESTAQUE SOBRAS AMARELO
+      - name: POPPINS 60px AMARELO + SOMBRA RETANGULO PRETO
         env:
           IMAGEMAGICK_BINARY: /usr/bin/convert
         run: |
@@ -47,6 +46,7 @@ jobs:
           base = to_916(VideoFileClip(base_path))
           video_dur = base.duration
           FONT = "/usr/share/fonts/truetype/poppins/Poppins-Bold.ttf"
+          AMARELO = "#FFD800"
 
           texto_es = "¡Hola, equipo! Hoy les traigo el paso a paso de cómo se hizo este proyecto del gabinete. Muchos me preguntaron qué técnica se usó. Los productos que usé fueron sobras de piso de la misma obra. Usé varillas de hierro, las amarré bien. Después hice un concreto bien fuerte. Usé masilla plástica para los bordes. Todo de piso. Corté las piezas al tamaño exacto. La clienta quería aprovechar el lavamanos que sigue en su lugar, no lo removí. Fui levantando el gabinete alrededor de él, solo desconecté el agua y el desagüe. Hice el montaje de acuerdo al espacio. No hubo material específico, simplemente piso, pegamento y varilla. ¡Vamos a escalar este perfil hasta la luna! Gracias, hasta la próxima."
 
@@ -57,7 +57,7 @@ jobs:
                   p=f"/tmp/c{i}.mp3"
                   for _ in range(3):
                       try:
-                          await edge_tts.Communicate(txt, "es-MX-JorgeNeural", rate="+18%", volume="+5%").save(p)
+                          await edge_tts.Communicate(txt, "es-MX-JorgeNeural", rate="+18%").save(p)
                           if os.path.getsize(p) > 1000:
                               audios.append(p)
                               break
@@ -80,28 +80,28 @@ jobs:
 
           base_cut = base.subclip(0, final_dur)
 
-          # TITULO POPPINS BOLD 60px BORDA 1px PRETO EMBAIXO
-          # Linha 1: GABINETES HECHOS COM
-          linha1 = TextClip("GABINETES HECHOS COM", font=FONT, fontsize=60, color="white", stroke_color="black", stroke_width=1, method="label")
-          linha1 = linha1.set_position(("center", 1420)).set_duration(final_dur)
+          def titulo_com_sombra(texto, y):
+              # texto amarelo 60px borda 1px preta
+              txt = TextClip(texto, font=FONT, fontsize=60, color=AMARELO, stroke_color="black", stroke_width=1, method="label")
+              w,h = txt.w, txt.h
+              # retangulo preto sombra atras - um pouco maior
+              sombra = ColorClip(size=(w+40, h+20), color=(0,0,0))
+              # posições - sombra levemente deslocada
+              sombra = sombra.set_position(("center", y+4)).set_duration(final_dur)
+              txt = txt.set_position(("center", y)).set_duration(final_dur)
+              return [sombra, txt]
 
-          # RETANGULO AMARELO PARA DESTAQUE SOBRAS
-          retangulo = ColorClip(size=(360, 78), color=(255, 216, 0)) # amarelo #FFD800
-          retangulo = retangulo.set_position(("center", 1505)).set_duration(final_dur)
+          # Monta 3 linhas todas amarelas com retangulo preto sombra
+          elementos = []
+          elementos += titulo_com_sombra("GABINETES HECHOS COM", 1410)
+          elementos += titulo_com_sombra("SOBRAS DE PISOS", 1500)
+          elementos += titulo_com_sombra("SIN MATERIAL CARO", 1590)
 
-          # Texto SOBRAS dentro do retangulo - letra PRETA Poppins Bold 60px
-          destaque = TextClip("SOBRAS", font=FONT, fontsize=60, color="black", method="label")
-          destaque = destaque.set_position(("center", 1508)).set_duration(final_dur)
-
-          # Linha 3: DE PISOS
-          linha3 = TextClip("DE PISOS", font=FONT, fontsize=60, color="white", stroke_color="black", stroke_width=1, method="label")
-          linha3 = linha3.set_position(("center", 1600)).set_duration(final_dur)
-
-          final = CompositeVideoClip([base_cut, linha1, retangulo, destaque, linha3]).set_duration(final_dur)
+          final = CompositeVideoClip([base_cut] + elementos).set_duration(final_dur)
           final.write_videofile("/tmp/temp_b.mp4",codec="libx264",fps=30,audio=False,threads=2)
-          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_final.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-TOP1-POPPINS-SOBRAS.mp4"],check=True)
+          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_final.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-TOP1-POPPINS-AMARELO-SOMBRA.mp4"],check=True)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: top1-poppins-sobras
-          path: /tmp/B-TOP1-POPPINS-SOBRAS.mp4
+          name: top1-poppins-amarelo-sombra
+          path: /tmp/B-TOP1-POPPINS-AMARELO-SOMBRA.mp4
