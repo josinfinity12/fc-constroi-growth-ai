@@ -1,57 +1,70 @@
 name: post_perpetuo_multidestino
+
 on:
   schedule:
-    - cron: '0 12,17,22 * * *'
+    - cron: '0 12,17,22 * * *' # 09:00, 14:00, 19:00 Bahia
   workflow_dispatch:
+
 jobs:
   post_tudo:
     runs-on: ubuntu-latest
+    
     steps:
+      - name: Set up job
+        run: echo "Iniciando..."
+
       - uses: actions/checkout@v4
-      
+
       - name: Instala tudo
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg imagemagick
-          sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
-          pip install instaloader Pillow edge-tts moviepy==1.0.3 yt-dlp requests
+          pip install instaloader yt-dlp moviepy openai whisper -q
+          sudo apt-get update && sudo apt-get install -y ffmpeg -qq
 
       - name: 1. PUXA do @fc_constroi (FONTE)
         env:
           IG_COOKIES: ${{ secrets.IG_COOKIES }}
         run: |
           echo "$IG_COOKIES" > /tmp/cookies.txt
-          instaloader --cookies /tmp/cookies.txt --no-captions --no-profile-pic --dirname-pattern=/tmp/insta --filename-pattern="{shortcode}" fc_constroi -- -l 1
-          rm /tmp/cookies.txt
-          ls /tmp/insta/
+          mkdir -p /tmp/insta
+          instaloader --cookies /tmp/cookies.txt \
+            --no-captions --no-metadata-json --no-video-thumbnails --no-compress-json \
+            --dirname-pattern /tmp/insta --filename-pattern "{shortcode}" \
+            --count 1 --no-pictures --no-profile-pic \
+            fc_constroi
+          ls -lh /tmp/insta/
+          VIDEO=$(find /tmp/insta -type f -name "*.mp4" | head -n 1)
+          echo "VIDEO_PATH=$VIDEO" >> $GITHUB_ENV
+          cp "$VIDEO" /tmp/original.mp4
 
       - name: 2. Dublagem + Legenda Poppins Amarela
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          # aqui entra seu script de dublagem Jorge + legenda
-          python scripts/dubla_espanhol.py /tmp/insta/ /tmp/pronto/
-          ls /tmp/pronto/
+          python scripts/dublagem_legenda.py --input /tmp/original.mp4 --output /tmp/processed_reel.mp4
 
       - name: 3. POSTA @fc_construye (IG DESTINO)
         env:
           IG_COOKIES_CONSTRUYE: ${{ secrets.IG_COOKIES_CONSTRUYE }}
         run: |
           echo "$IG_COOKIES_CONSTRUYE" > /tmp/cookies_construye.txt
-          python scripts/post_ig.py --cookies /tmp/cookies_construye.txt --video /tmp/pronto/final.mp4
-          rm /tmp/cookies_construye.txt
+          python scripts/post_ig.py --cookies /tmp/cookies_construye.txt --video /tmp/processed_reel.mp4 --caption "Novo hack de obra! 👷‍♂️ #construccion #obra"
 
       - name: 4. POSTA YouTube Shorts
         env:
-          YT_CLIENT: ${{ secrets.YOUTUBE_CLIENT }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
         run: |
-          echo "$YT_CLIENT" > client_secret.json
-          python scripts/post_yt.py --video /tmp/pronto/final.mp4
+          python scripts/post_yt.py --video /tmp/processed_reel.mp4
 
       - name: 5. POSTA TikTok + Facebook
         env:
-          TIKTOK_SESSION: ${{ secrets.TIKTOK_SESSION }}
-          FB_TOKEN: ${{ secrets.FB_TOKEN }}
+          TIKTOK_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
+          FB_COOKIES: ${{ secrets.FB_COOKIES }}
         run: |
-          python scripts/post_tiktok.py --session "$TIKTOK_SESSION" --video /tmp/pronto/final.mp4
-          python scripts/post_fb.py --token "$FB_TOKEN" --video /tmp/pronto/final.mp4
+          python scripts/post_tiktok_fb.py --video /tmp/processed_reel.mp4
 
       - name: 6. KWAI - PENDENTE
-        run: echo "Falta KWAI_TOKEN - video pronto em /tmp/pronto/final.mp4"
+        run: |
+          echo "Kwai pendente - salvar API depois"
+
+      - name: Post Run actions/checkout@v4
+        run: echo "Limpando /tmp"
