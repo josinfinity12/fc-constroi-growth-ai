@@ -24,14 +24,14 @@ jobs:
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
           pip install Pillow edge-tts moviepy==1.0.3 --no-cache-dir
           mkdir -p /tmp
-      - name: DUBLA 100% FIEL TOP1 60px EXTRA BOLD MEIO
+      - name: DUBLA 100% FIEL TOP1 FIX CHUNKS 60px EXTRA BOLD MEIO
         env:
           IMAGEMAGICK_BINARY: /usr/bin/convert
         run: |
           python - << 'PY'
           import PIL.Image
           if not hasattr(PIL.Image, 'ANTIALIAS'): PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
-          import os, glob, asyncio, subprocess
+          import os, glob, asyncio, subprocess, re
           from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
           import edge_tts
 
@@ -43,20 +43,38 @@ jobs:
           base = to_916(VideoFileClip(base_path))
           print(f"DURACAO: {base.duration:.1f}s")
 
-          # TEXTO 100% TRADUZIDO CERTO
           texto_es = """¡Hola equipo! Hoy les traigo el paso a paso, un video más explicativo de cómo se hizo este proyecto del gabinete. Muchos me preguntaron cómo se hizo, qué técnica se usó, qué material, qué pegamento. Miren, los productos que usé fueron sobras de piso de la misma obra que estaba haciendo en este baño. Utilicé varillas de hierro, las amarré bien, después hice un concreto bien fuerte. Usé masilla plástica para pegar esos bordes para que el concreto no se escurriera. Todo de piso. Después corté las piezas al tamaño exacto, porque la clienta quería aprovechar este lavamanos, que como ven sigue en su lugar, no lo removí. Fui levantando todo el gabinete alrededor de él, sin quitarlo, solo desconecté el agua y el desagüe. Y ahí hice el montaje de acuerdo al tamaño del espacio. No hubo un material específico, simplemente piso, pegamento y varilla. ¡Vamos a escalar este perfil hasta la luna! Gracias, hasta la próxima."""
 
-          async def ga():
-              await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="-6%",volume="+10%").save("/tmp/audio_es.mp3")
-          asyncio.run(ga())
+          # QUEBRA EM FRASES PRA NAO DAR NoAudioReceived
+          frases = re.split(r'(?<=[.!?])\s+', texto_es)
+          print(f"Frases: {len(frases)}")
+
+          async def gerar_chunks():
+              audios = []
+              for i, frase in enumerate(frases):
+                  if not frase.strip(): continue
+                  path = f"/tmp/chunk_{i}.mp3"
+                  try:
+                      await edge_tts.Communicate(frase, "es-MX-JorgeNeural", rate="-6%").save(path)
+                      audios.append(path)
+                      print(f"Chunk {i} OK: {frase[:40]}")
+                  except Exception as e:
+                      print(f"Erro chunk {i}: {e}")
+              # CONCATENA TUDO
+              with open("/tmp/lista.txt","w") as l:
+                  for a in audios:
+                      l.write(f"file '{a}'\n")
+              subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i","/tmp/lista.txt","-c","copy","/tmp/audio_es.mp3"], check=True)
+
+          asyncio.run(gerar_chunks())
 
           titulo = TextClip("GABINETE HECHO CON SOBRAS DE PISO", font="Montserrat-ExtraBold", fontsize=60, color="#FFD800", stroke_color="black", stroke_width=7, method="caption", size=(950,None))
           titulo = titulo.set_position(("center","center")).set_duration(base.duration)
 
           CompositeVideoClip([base,titulo]).set_duration(base.duration).write_videofile("/tmp/temp_b.mp4",codec="libx264",fps=30,audio=False,threads=2)
-          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_es.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-TOP1-100-FIEL-60px.mp4"],check=True)
+          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_es.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-TOP1-FIX-60px.mp4"],check=True)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: top1-100-fiel
-          path: /tmp/B-TOP1-100-FIEL-60px.mp4
+          name: top1-fix-chunks
+          path: /tmp/B-TOP1-FIX-60px.mp4
