@@ -17,7 +17,7 @@ jobs:
           pip install instaloader moviepy openai whisper python-telegram-bot yt-dlp -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -qq
 
-      - name: 1. PUXA do @fc_constroi (COM BACKUP TELEGRAM)
+      - name: 1. PUXA do @fc_constroi (COM BACKUP LOCAL)
         env:
           IG_COOKIES: ${{ secrets.IG_COOKIES }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -25,27 +25,14 @@ jobs:
           printf "%s\n" "$IG_COOKIES" > /tmp/cookies.txt
           mkdir -p /tmp/insta/fc_constroi
           
+          echo "=== Verificando seus backups ==="
+          ls -lh
+          ls -lh backup/ || echo "pasta backup vazia"
+          
           cat > /tmp/baixar.py << 'PY'
           import os, time, random, sys, http.cookiejar
           import instaloader
-
-          # Carrega cookies com mais compatibilidade
-          L = instaloader.Instaloader(
-              dirname_pattern="/tmp/insta", 
-              filename_pattern="{shortcode}",
-              sleep=True,
-              max_connection_attempts=2,
-              request_timeout=30
-          )
-          
-          try:
-              print("Carregando cookies.txt...")
-              L.load_session_from_file("fc_constroi", filename="/tmp/cookies.txt")
-              # O instaloader espera formato diferente, vamos tentar na mão tambem
-          except:
-              pass
-
-          # Carregamento manual que funcionava antes
+          L = instaloader.Instaloader(dirname_pattern="/tmp/insta", filename_pattern="{shortcode}", sleep=True, max_connection_attempts=2, request_timeout=30)
           try:
               cj = http.cookiejar.MozillaCookieJar("/tmp/cookies.txt")
               cj.load(ignore_discard=True, ignore_expires=True)
@@ -55,17 +42,10 @@ jobs:
                   if "instagram.com" in cookie.domain:
                       L.context._session.cookies.set(cookie.name, cookie.value, domain=cookie.domain)
                       if cookie.name == "csrftoken": csrf = cookie.value
-              L.context._session.headers.update({
-                  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15",
-                  "X-CSRFToken": csrf,
-                  "X-IG-App-ID": "936619743392459",
-                  "Referer": "https://www.instagram.com/",
-              })
+              L.context._session.headers.update({"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15", "X-CSRFToken": csrf, "X-IG-App-ID": "936619743392459", "Referer": "https://www.instagram.com/"})
               print(f"Login manual: {L.test_login()}")
           except Exception as e:
-              print(f"Erro ao carregar cookies manualmente: {e}")
-
-          # TENTA 1: API direta
+              print(f"Erro cookies: {e}")
           video_achado = False
           try:
               sess = L.context._session
@@ -88,12 +68,10 @@ jobs:
                       break
           except Exception as e:
               print(f"Tentativa 1 falhou: {e}")
-
-          # TENTA 2: Profile
           if not video_achado:
               try:
                   print("Tentativa 2: Profile.from_username...")
-                  time.sleep(10)
+                  time.sleep(5)
                   profile = instaloader.Profile.from_username(L.context, "fc_constroi")
                   for post in profile.get_posts():
                       if post.is_video:
@@ -103,70 +81,29 @@ jobs:
                           break
               except Exception as e:
                   print(f"Tentativa 2 falhou: {e}")
-
-          # TENTA 3: yt-dlp (novo, nunca toma 429)
-          if not video_achado:
-              try:
-                  print("Tentativa 3: yt-dlp (anti-429)...")
-                  import subprocess
-                  subprocess.run([
-                      "yt-dlp", "--cookies", "/tmp/cookies.txt",
-                      "-o", "/tmp/insta/fc_constroi/%(id)s.mp4",
-                      "https://www.instagram.com/fc_constroi/"
-                  ], check=False, timeout=60)
-                  # verifica se baixou
-                  import glob
-                  if glob.glob("/tmp/insta/fc_constroi/*.mp4"):
-                      video_achado = True
-              except Exception as e:
-                  print(f"Tentativa 3 falhou: {e}")
-
-          if not video_achado:
-              print("Nenhum video novo do Instagram, vai usar backup do canal Telegram")
-              sys.exit(2) # Codigo 2 = usar backup telegram
+          if video_achado:
+              print("Video do Instagram baixado com sucesso")
+              sys.exit(0)
+          else:
+              print("Nenhum video novo do Instagram, vai usar backup local")
+              sys.exit(2)
           PY
           
           python /tmp/baixar.py
           EXIT_CODE=$?
+          echo "Exit code do Instagram: $EXIT_CODE"
           
           if [ $EXIT_CODE -eq 2 ]; then
-            echo "Instagram falhou, puxando backup do canal FC-FONTE -1004272515403"
-            python3 << 'PY'
-          import asyncio, os
-          from telegram import Bot
-          async def baixar_backup():
-              bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
-              # Pega o ultimo video do canal - vamos usar o file_id do ultimo post seu
-              # Como fallback, usa um video que ja esta no repo se tiver
-              print("Tentando baixar ultimo video do canal...")
-              # Se voce ja postou algum video no canal, ele estara la
-              # Por enquanto, cria um placeholder e o workflow nao falha
-              # Na proxima rodada, quando o canal ja tiver videos, ele baixa
-              # Vamos verificar se tem backup local no repo
-              import glob
-              backups = glob.glob("backup/*.mp4") + glob.glob("*.mp4")
-              if backups:
-                  import shutil
-                  shutil.copy(backups[0], "/tmp/insta/fc_constroi/backup.mp4")
-                  print(f"Usando backup local: {backups[0]}")
-                  return
-              print("Sem backup local ainda, mas continua pro proximo passo")
-              # Cria um video dummy pra nao quebrar o fluxo - voce pode colocar um video em backup/backup.mp4 no repo
-              os.makedirs("/tmp/insta/fc_constroi", exist_ok=True)
-              open("/tmp/insta/fc_constroi/backup.mp4", "w").close()
-          asyncio.run(baixar_backup())
-          PY
+            echo "Instagram bloqueou, usando seu backup local..."
+            VIDEO_BACKUP=$(find backup -name "*.mp4" -type f | shuf -n 1)
+            echo "Backup escolhido: $VIDEO_BACKUP"
+            cp "$VIDEO_BACKUP" /tmp/original.mp4
+          else
+            VIDEO=$(find /tmp/insta -name "*.mp4" -size +10k | head -n 1)
+            cp "$VIDEO" /tmp/original.mp4
           fi
           
-          ls -lh /tmp/insta/fc_constroi/
-          VIDEO=$(find /tmp/insta -name "*.mp4" -size +10k | head -n 1)
-          if [ -z "$VIDEO" ]; then
-            echo "ERRO: Nenhum video encontrado nem no Instagram nem no backup"
-            echo "DICA: Coloque um video em backup/backup.mp4 no seu repo"
-            exit 1
-          fi
-          cp "$VIDEO" /tmp/original.mp4
-          echo "Baixado: $VIDEO"
+          ls -lh /tmp/original.mp4
           echo "VIDEO_PATH=/tmp/original.mp4" >> $GITHUB_ENV
 
       - name: 1.5 ENVIA PRO CANAL FC-FONTE (SEU HD PERPETUO)
