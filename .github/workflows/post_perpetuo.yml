@@ -24,8 +24,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-montserrat
-          pip install instagrapi edge-tts moviepy==1.0.3 pillow faster-whisper
-          fc-list | grep Montserrat
+          pip install Pillow==9.5.0 instagrapi edge-tts moviepy==1.0.3
           mkdir -p /tmp
 
       - name: TOP 3 VIRAIS + GERAR 2 VERSOES
@@ -35,62 +34,59 @@ jobs:
           MODO_TESTE: ${{ inputs.modo_teste || 'sim' }}
         run: |
           python - << 'PY'
-          import os, time, subprocess, glob, asyncio, shutil, random, json
+          # FIX PIL ANTIALIAS
+          import PIL.Image
+          if not hasattr(PIL.Image, 'ANTIALIAS'):
+              PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
+
+          import os, time, subprocess, shutil, random, asyncio
           from instagrapi import Client
           from instagrapi.exceptions import ClientThrottledError
-          from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip, AudioFileClip
+          from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
           import edge_tts
 
           SESSION_ID=os.getenv("IG_SESSIONID","").strip()
           MODO_TESTE=os.getenv("MODO_TESTE","sim")=="sim"
           USER_ID=int(os.getenv("FC_ID","15036334738"))
           
-          print(f"MODO TESTE={MODO_TESTE} USER_ID={USER_ID}")
+          print(f"MODO TESTE={MODO_TESTE}")
           cl=Client()
           cl.delay_range=[5,10]
           cl.login_by_sessionid(SESSION_ID)
-          print(f"Login OK como {cl.username}")
+          print(f"Login OK {cl.username}")
 
-          print("Esperando 90s pra limpar IP...")
+          print("Esperando 90s...")
           time.sleep(90)
 
           medias=None
           for i in range(5):
               try:
-                  print(f"Tentativa {i+1}/5 - buscando com GQL...")
                   medias=cl.user_medias_gql(USER_ID, 20)
-                  if not medias:
-                      medias=cl.user_medias(USER_ID, 20)
-                  print(f"Achei {len(medias)} posts")
+                  if not medias: medias=cl.user_medias(USER_ID, 20)
+                  print(f"Achei {len(medias)}")
                   break
               except ClientThrottledError:
                   w=600 + i*300 + random.randint(0,120)
-                  print(f"429 tentativa {i+1}/5, esperando {w}s...")
+                  print(f"429 esperando {w}s")
                   time.sleep(w)
               except Exception as e:
-                  print(f"Erro {e}, tentando de novo em 60s")
+                  print(f"Erro {e}")
                   time.sleep(60)
 
           final = "/tmp/video_final.mp4"
           if not medias:
-              print("Ainda em 429 - SALVANDO VIDEO BACKUP LOCAL")
               subprocess.run(["ffmpeg","-y","-f","lavfi","-i","color=c=black:s=1080x1920:d=5","-vf","drawtext=text='AGUARDE 2H - IP BLOQUEADO':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2", final], check=True)
           else:
               top = sorted(medias, key=lambda x: x.like_count + x.comment_count, reverse=True)[:3]
-              for idx,m in enumerate(top,1):
-                  print(f"TOP {idx}: {m.code} - {m.like_count} likes")
               best = top[0]
               path = cl.video_download(best.pk, folder="/tmp")
               if os.path.exists(final): os.remove(final)
               shutil.move(path, final)
-              print(f"Baixado {final}")
 
-          # ===== AQUI COMEÇA SEU TESTE A/B COM COR #FFD800 =====
-          print("Gerando 2 versões teste...")
+          # ===== GERAR 2 VERSOES #FFD800 =====
+          print("Gerando 2 versões...")
+          clip_base = VideoFileClip(final).subclip(0, min(20, VideoFileClip(final).duration))
           
-          # Garante 9:16
-          clip_base = VideoFileClip(final).subclip(0, min(25, VideoFileClip(final).duration))
-          # resize pra 1080x1920
           def to_916(c):
               c = c.resize(height=1920)
               if c.w > 1080:
@@ -99,48 +95,33 @@ jobs:
                   c = c.on_color(size=(1080,1920), color=(0,0,0), pos=('center','center'))
               return c
           base = to_916(clip_base)
-          
-          # --- VIDEO A: LEGENDADO NATURAL (Mantém audio original) ---
-          # Texto Amarelo #FFD800 com Contorno Preto - palavras-chave
+
+          # VIDEO A - LEGENDADO NATURAL
           palavras = ["PORCELANATO", "HUECO?", "DOBLE", "ENCOLADO!", "NIVELADO", "FRAGUE"]
           clips_a = [base]
           t = 0
-          dur_palavra = base.duration / len(palavras)
+          dur = base.duration / len(palavras)
           for p in palavras:
-              if t >= base.duration: break
-              txt = TextClip(p, font="Montserrat-Extra-Bold", fontsize=40, color="#FFD800", stroke_color="black", stroke_width=6, method="label")
-              txt = txt.set_position(("center", 1350)).set_duration(dur_palavra).set_start(t)
+              txt = TextClip(p, font="Montserrat-ExtraBold", fontsize=40, color="#FFD800", stroke_color="black", stroke_width=6, method="label")
+              txt = txt.set_position(("center", 1350)).set_duration(dur).set_start(t)
               clips_a.append(txt)
-              t += dur_palavra
-          
+              t += dur
           video_a = CompositeVideoClip(clips_a).set_duration(base.duration)
           video_a.write_videofile("/tmp/A-NATURAL-legendado.mp4", codec="libx264", audio_codec="aac", fps=30)
-          print("Gerado A-NATURAL-legendado.mp4")
+          print("Gerado A")
 
-          # --- VIDEO B: DUBLADO + TITULO TIKTOK ---
-          # Titulo Montserrat 32px amarelo #FFD800
+          # VIDEO B - DUBLADO + TITULO 32px
           async def gerar_audio():
-              texto_es = "¿Tu porcelanato suena hueco? El truco es el doble encolado para que quede nivelado."
-              communicate = edge_tts.Communicate(texto_es, "es-MX-JorgeNeural", rate="-8%")
+              communicate = edge_tts.Communicate("¿Tu porcelanato suena hueco? El truco es el doble encolado para que quede nivelado.", "es-MX-JorgeNeural", rate="-8%")
               await communicate.save("/tmp/audio_es.mp3")
           asyncio.run(gerar_audio())
 
-          # titulo tiktok
           titulo = TextClip("¿TU PORCELANATO SUENA HUECO?", font="Montserrat-Bold", fontsize=32, color="#FFD800", stroke_color="black", stroke_width=3, method="caption", size=(950, None), align="center")
           titulo = titulo.set_position(("center", 180)).set_duration(base.duration)
-          
-          # junta video + titulo
           video_b_sem_audio = CompositeVideoClip([base, titulo]).set_duration(base.duration)
           video_b_sem_audio.write_videofile("/tmp/temp_b.mp4", codec="libx264", fps=30, audio=False)
-          
-          # troca audio
           subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_es.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-DUBLADO-titulo.mp4"], check=True)
-          print("Gerado B-DUBLADO-titulo.mp4")
-
-          if MODO_TESTE:
-              print("MODO TESTE - só gerou, não vai postar")
-          else:
-              print("MODO PRODUCAO - aqui vai o codigo de postar")
+          print("Gerado B")
           PY
 
       - name: Upload 3 videos teste A/B
