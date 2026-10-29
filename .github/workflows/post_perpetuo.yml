@@ -1,107 +1,57 @@
-name: post_perpetuo
+name: post_perpetuo_multidestino
 on:
-  workflow_dispatch:
-    inputs:
-      modo_teste:
-        description: 'Modo teste? (sim/nao)'
-        required: true
-        default: 'sim'
-        type: choice
-        options:
-          - sim
-          - nao
   schedule:
     - cron: '0 12,17,22 * * *'
+  workflow_dispatch:
 jobs:
-  post_perpetuo:
+  post_tudo:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install deps + Poppins Bold
+      
+      - name: Instala tudo
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg imagemagick wget
+          sudo apt-get update && sudo apt-get install -y ffmpeg imagemagick
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml || true
-          sudo mkdir -p /usr/share/fonts/truetype/poppins
-          sudo wget -q -O /usr/share/fonts/truetype/poppins/Poppins-Bold.ttf https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Bold.ttf
-          sudo fc-cache -f
-          pip install Pillow edge-tts moviepy==1.0.3 --no-cache-dir
-          mkdir -p /tmp
-      - name: POPPINS 60px AMARELO + SOMBRA RETANGULO PRETO
+          pip install instaloader Pillow edge-tts moviepy==1.0.3 yt-dlp requests
+
+      - name: 1. PUXA do @fc_constroi (FONTE)
         env:
-          IMAGEMAGICK_BINARY: /usr/bin/convert
+          IG_COOKIES: ${{ secrets.IG_COOKIES }}
         run: |
-          python - << 'PY'
-          import PIL.Image
-          if not hasattr(PIL.Image, 'ANTIALIAS'): PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
-          import os, asyncio, subprocess, json, textwrap
-          from moviepy.editor import VideoFileClip, TextClip, ColorClip, CompositeVideoClip
-          import edge_tts
+          echo "$IG_COOKIES" > /tmp/cookies.txt
+          instaloader --cookies /tmp/cookies.txt --no-captions --no-profile-pic --dirname-pattern=/tmp/insta --filename-pattern="{shortcode}" fc_constroi -- -l 1
+          rm /tmp/cookies.txt
+          ls /tmp/insta/
 
-          base_path = "videos_brutos/top1.mp4"
-          def to_916(c):
-              c=c.resize(height=1920)
-              return c.crop(width=1080,height=1920,x_center=c.w/2,y_center=c.h/2) if c.w>1080 else c.on_color(size=(1080,1920),color=(0,0,0),pos=('center','center'))
+      - name: 2. Dublagem + Legenda Poppins Amarela
+        run: |
+          # aqui entra seu script de dublagem Jorge + legenda
+          python scripts/dubla_espanhol.py /tmp/insta/ /tmp/pronto/
+          ls /tmp/pronto/
 
-          base = to_916(VideoFileClip(base_path))
-          video_dur = base.duration
-          FONT = "/usr/share/fonts/truetype/poppins/Poppins-Bold.ttf"
-          AMARELO = "#FFD800"
+      - name: 3. POSTA @fc_construye (IG DESTINO)
+        env:
+          IG_COOKIES_CONSTRUYE: ${{ secrets.IG_COOKIES_CONSTRUYE }}
+        run: |
+          echo "$IG_COOKIES_CONSTRUYE" > /tmp/cookies_construye.txt
+          python scripts/post_ig.py --cookies /tmp/cookies_construye.txt --video /tmp/pronto/final.mp4
+          rm /tmp/cookies_construye.txt
 
-          texto_es = "¡Hola, equipo! Hoy les traigo el paso a paso de cómo se hizo este proyecto del gabinete. Muchos me preguntaron qué técnica se usó. Los productos que usé fueron sobras de piso de la misma obra. Usé varillas de hierro, las amarré bien. Después hice un concreto bien fuerte. Usé masilla plástica para los bordes. Todo de piso. Corté las piezas al tamaño exacto. La clienta quería aprovechar el lavamanos que sigue en su lugar, no lo removí. Fui levantando el gabinete alrededor de él, solo desconecté el agua y el desagüe. Hice el montaje de acuerdo al espacio. No hubo material específico, simplemente piso, pegamento y varilla. ¡Vamos a escalar este perfil hasta la luna! Gracias, hasta la próxima."
+      - name: 4. POSTA YouTube Shorts
+        env:
+          YT_CLIENT: ${{ secrets.YOUTUBE_CLIENT }}
+        run: |
+          echo "$YT_CLIENT" > client_secret.json
+          python scripts/post_yt.py --video /tmp/pronto/final.mp4
 
-          chunks = textwrap.wrap(texto_es, width=110, break_long_words=False)
-          async def gerar():
-              audios=[]
-              for i, txt in enumerate(chunks):
-                  p=f"/tmp/c{i}.mp3"
-                  for _ in range(3):
-                      try:
-                          await edge_tts.Communicate(txt, "es-MX-JorgeNeural", rate="+18%").save(p)
-                          if os.path.getsize(p) > 1000:
-                              audios.append(p)
-                              break
-                      except: await asyncio.sleep(1)
-                  await asyncio.sleep(0.5)
-              with open("/tmp/lista.txt","w") as l:
-                  for a in audios: l.write(f"file '{a}'\n")
-              subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i","/tmp/lista.txt","-c","copy","/tmp/audio_raw.mp3"], check=True)
-          asyncio.run(gerar())
+      - name: 5. POSTA TikTok + Facebook
+        env:
+          TIKTOK_SESSION: ${{ secrets.TIKTOK_SESSION }}
+          FB_TOKEN: ${{ secrets.FB_TOKEN }}
+        run: |
+          python scripts/post_tiktok.py --session "$TIKTOK_SESSION" --video /tmp/pronto/final.mp4
+          python scripts/post_fb.py --token "$FB_TOKEN" --video /tmp/pronto/final.mp4
 
-          r=subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","json","/tmp/audio_raw.mp3"], capture_output=True, text=True)
-          audio_dur=float(json.loads(r.stdout)['format']['duration'])
-          if audio_dur > video_dur:
-              fator = min(audio_dur/video_dur, 1.4)
-              subprocess.run(["ffmpeg","-y","-i","/tmp/audio_raw.mp3","-filter:a",f"atempo={fator}","/tmp/audio_final.mp3"], check=True)
-              final_dur=video_dur
-          else:
-              subprocess.run(["ffmpeg","-y","-i","/tmp/audio_raw.mp3","-c","copy","/tmp/audio_final.mp3"], check=True)
-              final_dur=audio_dur
-
-          base_cut = base.subclip(0, final_dur)
-
-          def titulo_com_sombra(texto, y):
-              # texto amarelo 60px borda 1px preta
-              txt = TextClip(texto, font=FONT, fontsize=60, color=AMARELO, stroke_color="black", stroke_width=1, method="label")
-              w,h = txt.w, txt.h
-              # retangulo preto sombra atras - um pouco maior
-              sombra = ColorClip(size=(w+40, h+20), color=(0,0,0))
-              # posições - sombra levemente deslocada
-              sombra = sombra.set_position(("center", y+4)).set_duration(final_dur)
-              txt = txt.set_position(("center", y)).set_duration(final_dur)
-              return [sombra, txt]
-
-          # Monta 3 linhas todas amarelas com retangulo preto sombra
-          elementos = []
-          elementos += titulo_com_sombra("GABINETES HECHOS COM", 1410)
-          elementos += titulo_com_sombra("SOBRAS DE PISOS", 1500)
-          elementos += titulo_com_sombra("SIN MATERIAL CARO", 1590)
-
-          final = CompositeVideoClip([base_cut] + elementos).set_duration(final_dur)
-          final.write_videofile("/tmp/temp_b.mp4",codec="libx264",fps=30,audio=False,threads=2)
-          subprocess.run(["ffmpeg","-y","-i","/tmp/temp_b.mp4","-i","/tmp/audio_final.mp3","-c:v","copy","-map","0:v:0","-map","1:a:0","-shortest","/tmp/B-TOP1-POPPINS-AMARELO-SOMBRA.mp4"],check=True)
-          PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: top1-poppins-amarelo-sombra
-          path: /tmp/B-TOP1-POPPINS-AMARELO-SOMBRA.mp4
+      - name: 6. KWAI - PENDENTE
+        run: echo "Falta KWAI_TOKEN - video pronto em /tmp/pronto/final.mp4"
