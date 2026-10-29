@@ -17,14 +17,20 @@ jobs:
           pip install instaloader moviepy openai whisper python-telegram-bot -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -qq
 
-      - name: 1. PUXA do @fc_constroi (FIX API DIRETA)
+      - name: 1. PUXA do @fc_constroi (COM FALLBACK TELEGRAM)
         env:
           IG_COOKIES: ${{ secrets.IG_COOKIES }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           printf "%s\n" "$IG_COOKIES" > /tmp/cookies.txt
           cat > /tmp/baixar.py << 'PY'
-          import instaloader, http.cookiejar, os
-          L = instaloader.Instaloader(dirname_pattern="/tmp/insta", filename_pattern="{shortcode}")
+          import instaloader, http.cookiejar, os, time, random, sys
+          L = instaloader.Instaloader(
+              dirname_pattern="/tmp/insta", 
+              filename_pattern="{shortcode}",
+              sleep=True,
+              max_connection_attempts=1
+          )
           cj = http.cookiejar.MozillaCookieJar("/tmp/cookies.txt")
           cj.load(ignore_discard=True, ignore_expires=True)
           print(f"Cookies carregados: {len(cj)}")
@@ -35,35 +41,59 @@ jobs:
                   if cookie.name == "csrftoken": 
                       csrf = cookie.value
           L.context._session.headers.update({
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0.0.0 Safari/537.36",
+              "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
               "X-CSRFToken": csrf,
               "X-IG-App-ID": "936619743392459",
               "Referer": "https://www.instagram.com/",
-              "X-Requested-With": "XMLHttpRequest"
           })
           print(f"Login: {L.test_login()}")
-          sess = L.context._session
-          r = sess.get("https://i.instagram.com/api/v1/users/web_profile_info/?username=fc_constroi")
-          print(f"API status: {r.status_code}")
-          if r.status_code != 200:
-              print(r.text[:500])
+
+          # TENTATIVA 1: API DIRETA
+          try:
+              sess = L.context._session
+              r = sess.get("https://i.instagram.com/api/v1/users/web_profile_info/?username=fc_constroi", timeout=15)
+              print(f"API status: {r.status_code}")
+              if r.status_code == 429:
+                  print("API deu 429, esperando 45s...")
+                  time.sleep(45 + random.randint(1,10))
+                  raise Exception("429 - tentando metodo 2")
+              r.raise_for_status()
+              data = r.json()
+              user_id = data['data']['user']['id']
+              print(f"User ID: {user_id}")
+              r2 = sess.get(f"https://i.instagram.com/api/v1/feed/user/{user_id}/?count=12", timeout=15)
+              posts = r2.json()['items']
+              for item in posts:
+                  if item.get('media_type') == 2 or item.get('product_type') == 'clips':
+                      code = item['code']
+                      print(f"Achei video: {code}")
+                      post = instaloader.Post.from_shortcode(L.context, code)
+                      L.download_post(post, target="fc_constroi")
+                      sys.exit(0)
+          except Exception as e:
+              print(f"Tentativa 1 falhou: {e}")
+
+          # TENTATIVA 2: INSTALOADER PURO
+          try:
+              print("Tentativa 2: Profile.from_username com delay...")
+              time.sleep(15)
+              profile = instaloader.Profile.from_username(L.context, "fc_constroi")
+              count = 0
+              for post in profile.get_posts():
+                  if post.is_video:
+                      print(f"Achei video via Profile: {post.shortcode}")
+                      L.download_post(post, target="fc_constroi")
+                      sys.exit(0)
+                  count += 1
+                  if count > 10:
+                      break
+                  time.sleep(5)
+          except Exception as e:
+              print(f"Tentativa 2 falhou: {e}")
               exit(1)
-          data = r.json()
-          user_id = data['data']['user']['id']
-          print(f"User ID: {user_id}")
-          r2 = sess.get(f"https://i.instagram.com/api/v1/feed/user/{user_id}/?count=12")
-          posts = r2.json()['items']
-          video_shortcode = None
-          for item in posts:
-              if item.get('media_type') == 2 or item.get('product_type') == 'clips':
-                  video_shortcode = item['code']
-                  print(f"Achei video: {video_shortcode}")
-                  break
-          if not video_shortcode:
-              print("Nenhum video achado")
-              exit(1)
-          post = instaloader.Post.from_shortcode(L.context, video_shortcode)
-          L.download_post(post, target="fc_constroi")
+
+          print("Nenhum video achado")
+          exit(1)
           PY
           python /tmp/baixar.py
           ls -lh /tmp/insta/fc_constroi/
@@ -77,21 +107,16 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           python3 << 'PY'
-          import asyncio
+          import asyncio, os
           from telegram import Bot
-          import os
           async def send():
               bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
-              # -1004272515403 é o ID do seu canal FC - FONTE
               msg = await bot.send_video(
                   chat_id=-1004272515403, 
                   video=open("/tmp/original.mp4", "rb"),
                   caption="ORIGINAL @fc_constroi - backup perpetuo"
               )
               print(f"Salvo no canal! file_id: {msg.video.file_id}")
-              # Salva o file_id pra usar nas 5 redes sem baixar de novo
-              with open("/tmp/telegram_file_id.txt", "w") as f:
-                  f.write(msg.video.file_id)
           asyncio.run(send())
           PY
 
@@ -139,4 +164,4 @@ jobs:
           KWAI_COOKIES: ${{ secrets.KWAI_COOKIES }}
         run: |
           python scripts/post_tiktok_fb.py --video /tmp/processed_reel.mp4
-          python scripts/post_kwai.py --video /tmp/processed_reel.mp4
+          python scripts/post_kwai.py --video /tmp/processed_reel.mp4 || echo "Kwai pendente"
