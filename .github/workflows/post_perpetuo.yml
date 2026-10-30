@@ -16,70 +16,62 @@ jobs:
       - uses: actions/checkout@v4
       - name: Instala
         run: |
-          pip install "instagrapi[video]" requests google-api-python-client google-auth edge-tts -q
+          pip install "instagrapi[video]" requests google-api-python-client google-auth edge-tts telethon -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -q
 
-      - name: 1 - Baixa do Telegram - ORIGINAL DE ONTEM
+      - name: 1 - Baixa do Telegram SEM LIMITE 20MB
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
         run: |
           cat > /tmp/baixa.py << 'PY'
-          import os, random, requests, json
-          token=os.getenv("TELEGRAM_BOT_TOKEN").strip()
+          import os, random, json, asyncio
+          from telethon import TelegramClient
+          api_id=int(os.getenv("TG_API_ID")); api_hash=os.getenv("TG_API_HASH"); bot_token=os.getenv("TELEGRAM_BOT_TOKEN")
+          channel=os.getenv("TELEGRAM_CHANNEL","") # @seucanal ou ID
           hist_file="historico_4redes.json"
           try: hist=json.load(open(hist_file))
           except: hist=[]
-          r=requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"limit":100}).json()
-          file_ids=[]
-          for upd in r.get("result",[]):
-            msg=upd.get("channel_post") or upd.get("message") or {}
-            v=msg.get("video")
-            if v and v.get("file_id"): file_ids.append(v["file_id"])
-          file_ids=list(dict.fromkeys(file_ids))
-          print(f"Telegram: {len(file_ids)} videos")
-          disp=[f for f in file_ids if f not in hist] or file_ids
-          if len(disp)==len(file_ids) and len(hist)>=len(file_ids):
-            print("Resetando historico"); hist=[]; disp=file_ids
-          random.shuffle(disp)
-          baixado=False
-          for fid in disp:
-            print(f"Tentando {fid[:15]}...")
-            try:
-              resp=requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id":fid}, timeout=30).json()
-              if not resp.get("ok"):
-                print(f"Pulando: {resp}"); continue
-              fp=resp["result"]["file_path"]
-              dl=f"https://api.telegram.org/file/bot{token}/{fp}"
-              data=requests.get(dl, timeout=120).content
-              if len(data)<15000: continue
-              open("/tmp/original.mp4","wb").write(data)
-              print(f"BAIXADO {len(data)} bytes")
-              hist.append(fid)
-              json.dump(hist[-100:], open(hist_file,"w"))
-              baixado=True; break
-            except Exception as e:
-              print(f"Erro {e}"); continue
-          if not baixado:
-            json.dump([], open(hist_file,"w"))
-            raise SystemExit("Todos file_ids expiraram, rode de novo")
-          escolha=random.choice(["top1","top2","top3"])
-          open("escolha.txt","w").write(escolha)
-          print(f"ESCOLHA {escolha}")
+          async def main():
+            client=TelegramClient("/tmp/bot_session", api_id, api_hash)
+            await client.start(bot_token=bot_token)
+            # pega ultimos 20 videos do canal
+            entity=await client.get_entity(channel) if channel else await client.get_entity("me")
+            # se nao tem channel, usa getUpdates via bot mesmo
+            msgs=await client.get_messages(entity, limit=20)
+            videos=[m for m in msgs if m.video]
+            print(f"Achados via Telethon: {len(videos)} videos")
+            # filtra nao usados
+            disp=[v for v in videos if str(v.id) not in hist] or videos
+            if not disp: disp=videos
+            random.shuffle(disp)
+            v=random.choice(disp)
+            print(f"Baixando video id {v.id} tamanho {v.video.size} bytes - SEM LIMITE 20MB")
+            await client.download_media(v, "/tmp/original.mp4")
+            print(f"BAIXADO {os.path.getsize('/tmp/original.mp4')} bytes")
+            hist.append(str(v.id))
+            json.dump(hist[-100:], open(hist_file,"w"))
+            await client.disconnect()
+            open("escolha.txt","w").write(random.choice(["top1","top2","top3"]))
+          asyncio.run(main())
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - Dublagem FIX AUDIO - UNICO ADD
+      - name: 1.5 - Dublagem FIX AUDIO
         run: |
           cat > /tmp/dubla.py << 'PY'
-          import json, asyncio, os
+          import json, asyncio
           escolha=open("escolha.txt").read().strip()
           dados=json.load(open("transcricoes.json", encoding="utf-8"))
           texto=dados.get(f"{escolha}_es") or dados.get(escolha) or dados["top1_es"]
-          print(f"DUBLANDO {escolha}: {texto[:100]}")
+          print(f"DUBLANDO {escolha}")
           async def dub():
             import edge_tts
             await edge_tts.Communicate(texto[:380], "es-MX-JorgeNeural", rate="-8%", volume="+25%").save("/tmp/dub.mp3")
           asyncio.run(dub())
+          import os
           os.system('ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:a]volume=0.10[bg];[1:a]volume=1.8[voice];[bg][voice]amix=inputs=2:duration=longest" -c:v copy -map 0:v -map 1:a -shortest /tmp/dublado.mp4 -loglevel error')
           os.system("cp /tmp/dublado.mp4 /tmp/original.mp4")
           open("/tmp/legenda.txt","w", encoding="utf-8").write(texto)
@@ -105,11 +97,10 @@ jobs:
           try: cl.login_by_sessionid(os.getenv("IG_SESSIONID").strip())
           except: cl.login(os.getenv("INSTAGRAM_USER"), os.getenv("INSTAGRAM_PASS"))
           cl.clip_upload("/tmp/processed_reel.mp4", f"{legenda}\n\n#construccion", thumbnail="/tmp/thumb.jpg")
-          print("INSTAGRAM OK")
           PY
           python /tmp/ig.py
 
-      - name: 4 - Facebook FIX 400 - UNICO ADD
+      - name: 4 - Facebook FIX 400
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
@@ -121,15 +112,12 @@ jobs:
           legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:300]
           url=f"https://graph.facebook.com/v20.0/{page}/video_reels"
           r1=requests.post(url, data={"upload_phase":"start","access_token":token}).json()
-          print(f"START: {r1}")
           vid=r1["video_id"]; upload_url=r1["upload_url"]
           size=os.path.getsize("/tmp/processed_reel.mp4")
           with open("/tmp/processed_reel.mp4","rb") as f:
-            r2=requests.post(upload_url, headers={"Authorization":f"OAuth {token}","file_offset":"0","file_size":str(size)}, data=f)
-          print(f"UPLOAD {r2.status_code}")
+            requests.post(upload_url, headers={"Authorization":f"OAuth {token}","file_offset":"0","file_size":str(size)}, data=f)
           time.sleep(6)
-          r3=requests.post(url, data={"upload_phase":"finish","video_id":vid,"description":legenda,"access_token":token})
-          print(f"FB FINISH {r3.status_code}: {r3.text[:600]}")
+          requests.post(url, data={"upload_phase":"finish","video_id":vid,"description":legenda,"access_token":token})
           PY
           python /tmp/fb.py
 
@@ -150,7 +138,6 @@ jobs:
           body={"snippet":{"title":legenda[:85]+" #shorts","description":legenda,"categoryId":"27"},"status":{"privacyStatus":"public"}}
           media=MediaFileUpload("/tmp/processed_reel.mp4", mimetype="video/mp4", resumable=True)
           youtube.videos().insert(part="snippet,status", body=body, media_body=media).execute()
-          print("YOUTUBE OK")
           PY
           python /tmp/yt.py
 
@@ -173,7 +160,6 @@ jobs:
           headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"}
           body={"post_info":{"title":legenda,"privacy_level":"PUBLIC_TO_EVERYONE"},"source_info":{"source":"FILE_UPLOAD","video_size":os.path.getsize("/tmp/processed_reel.mp4"),"chunk_size":10000000,"total_chunk_count":1}}
           r2=requests.post("https://open.tiktokapis.com/v2/post/publish/video/init/", headers=headers, json=body)
-          print(f"TIKTOK INIT {r2.status_code}: {r2.text[:500]}")
           if r2.status_code==200:
             up=r2.json()["data"]["upload_url"]; size=os.path.getsize("/tmp/processed_reel.mp4")
             with open("/tmp/processed_reel.mp4","rb") as f: requests.put(up, headers={"Content-Range":f"bytes 0-{size-1}/{size}"}, data=f)
