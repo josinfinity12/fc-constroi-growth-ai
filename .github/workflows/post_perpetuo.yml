@@ -1,4 +1,4 @@
-name: FC Construye - 4 Redes Perpetuo FINAL
+name: FC Construye - 4 Redes Perpetuo FINAL FIX
 
 on:
   schedule:
@@ -27,18 +27,24 @@ jobs:
           TELEGRAM_CHANNEL_BACKUP: ${{ secrets.TELEGRAM_CHANNEL_BACKUP }}
         run: |
           cat > /tmp/baixa.py << 'PY'
-          import os, random, json, asyncio
-          token=os.getenv("TELEGRAM_BOT_TOKEN").strip()
-          api_id_raw=os.getenv("TELEGRAM_API_ID","").strip()
+          import os, json, asyncio
+          token=os.getenv("TELEGRAM_BOT_TOKEN","").strip()
+          api_id_raw=os.getenv("TELEGRAM_API_ID","").strip().split(":")[0]
           api_hash=os.getenv("TELEGRAM_API_HASH","").strip()
           channel=(os.getenv("TELEGRAM_CHANNEL") or os.getenv("TELEGRAM_CHANNEL_BACKUP") or "").strip()
+          print(f"DEBUG ID={api_id_raw} len={len(api_id_raw)} HASH_len={len(api_hash)} CHANNEL={channel}")
+          try:
+            api_id=int(api_id_raw)
+            if api_id>2147483647:
+              raise ValueError(f"API_ID {api_id} muito grande! Você colocou o BOT_TOKEN. Use 32760054")
+          except Exception as e:
+            raise SystemExit(f"TELEGRAM_API_ID invalido: '{api_id_raw}' - tem que ser 32760054 - Erro: {e}")
           hist_file="historico_4redes.json"
           try: hist=json.load(open(hist_file))
           except: hist=[]
-          print(f"API_ID {api_id_raw} HASH {bool(api_hash)} CHANNEL {channel}")
           async def main():
             from telethon import TelegramClient
-            client=TelegramClient("/tmp/bot_session", int(api_id_raw), api_hash)
+            client=TelegramClient("/tmp/bot_session", api_id, api_hash)
             await client.start(bot_token=token)
             entity=await client.get_entity(channel)
             msgs=await client.get_messages(entity, limit=40)
@@ -48,7 +54,7 @@ jobs:
             disp=[v for v in vids if str(v.id) not in hist]
             if not disp:
               print("Reset historico"); disp=vids; hist.clear()
-            v=random.choice(disp)
+            import random; v=random.choice(disp)
             print(f"Baixando ID {v.id} size {v.video.size}")
             await client.download_media(v, "/tmp/original.mp4")
             print(f"Baixado {os.path.getsize('/tmp/original.mp4')} bytes")
@@ -60,7 +66,7 @@ jobs:
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - DUBLAGEM ES com transcrições
+      - name: 1.5 - DUBLAGEM ES com transcricoes
         run: |
           cat > /tmp/dubla.py << 'PY'
           import json, asyncio, os
@@ -69,7 +75,7 @@ jobs:
             dados=json.load(open("transcricoes.json", encoding="utf-8"))
             texto=dados.get(f"{escolha}_es") or dados.get(f"{escolha}") or dados.get("top1_es") or "HOLA AMIGOS!"
           except:
-            texto="HOLA AMIGOS! ¿Del 1 al 10 cuanto le dan a este trabajo?"
+            texto="HOLA AMIGOS! Del 1 al 10 cuanto le dan a este trabajo?"
           texto=texto[:380]
           print(f"DUBLANDO: {texto[:120]}")
           async def dub():
@@ -101,7 +107,7 @@ jobs:
           from instagrapi import Client
           user=os.getenv("INSTAGRAM_USER"); pwd=os.getenv("INSTAGRAM_PASS"); sess=os.getenv("IG_SESSIONID")
           texto=open("/tmp/legenda.txt", encoding="utf-8").read()[:180]
-          caption=f"{texto}\n\n¿Del 1 al 10? 👇 Comenta!\n.\n.\n#construccion #albanil #obra #fcconstruye"
+          caption=f"{texto}\n\n¿Del 1 al 10? Comenta!\n.\n#construccion #albanil #obra #fcconstruye"
           cl=Client(); cl.delay_range=[1,3]
           try:
             if sess: cl.login_by_sessionid(sess.strip())
