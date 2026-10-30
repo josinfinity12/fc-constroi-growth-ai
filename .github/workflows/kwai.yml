@@ -1,22 +1,48 @@
-name: Postar no Kwai
-on:
-  workflow_dispatch:
+import os
+import asyncio
+from playwright.async_api import async_playwright
 
-jobs:
-  post-kwai:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Instalar dependências
-        run: |
-          pip install playwright
-          python -m playwright install --with-deps chromium
-      
-      - name: Rodar uploader Kwai
-        run: python kwai_uploader.py
-        env:
-          KWAI_COOKIES: ${{ secrets.KWAI_COOKIES }}
+async def post_kwai():
+    cookies_str = os.getenv("KWAI_COOKIES")
+    if not cookies_str:
+        print("❌ KWAI_COOKIES vazio")
+        return
+
+    cookies = []
+    for item in cookies_str.split(";"):
+        if "=" in item:
+            name, value = item.strip().split("=", 1)
+            if name and value:
+                cookies.append({"name": name, "value": value, "domain": ".kwai.com", "path": "/"})
+
+    print(f"🍪 {len(cookies)} cookies carregados")
+    
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context()
+        await context.add_cookies(cookies)
+        page = await context.new_page()
+        
+        print("🔐 Entrando no kwai.com...")
+        # USA domcontentloaded - NÃO TRAVA MAIS
+        await page.goto("https://www.kwai.com", wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(5000)
+        
+        title = await page.title()
+        print(f"📄 Título da página: {title}")
+        
+        # Verifica se logou - procura seu nome
+        content = await page.content()
+        if "Login" in content and "josinfinity" not in content.lower():
+            print("⚠️ Parece que não logou - cookie pode ter expirado")
+        else:
+            print("✅ LOGADO COM SUCESSO NO KWAI!")
+        
+        await page.screenshot(path="kwai_proof.png")
+        print("📸 Print salvo como prova")
+        
+        await browser.close()
+        print("✅ Teste finalizado sem travar!")
+
+if __name__ == "__main__":
+    asyncio.run(post_kwai())
