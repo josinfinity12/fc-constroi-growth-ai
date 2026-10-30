@@ -1,4 +1,4 @@
-name: FC - FONTE - VELOZ + DUBLADO TOTAL
+name: FC - FONTE - VELOZ + 5 TRANSCRICOES PERPETUO
 
 on:
   workflow_dispatch:
@@ -49,80 +49,80 @@ jobs:
                   if m and m.video: vids.append(m)
               except: pass
               if len(vids)>=60: break
-            print(f"Videos: {len(vids)}")
+            print(f"Videos encontrados: {len(vids)}")
             disp=[v for v in vids if str(v.id) not in hist]
             if not disp: disp=vids; hist.clear()
             import random; v=random.choice(disp)
             await client.download_media(v, "/tmp/original.mp4")
             hist.append(str(v.id))
             json.dump(hist[-100:], open(hist_file,"w"))
+            print(f"Baixado video ID {v.id}")
             await client.disconnect()
           asyncio.run(main())
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - VELOCIDADE + DUBLAGEM TOTAL AJUSTADA
+      - name: 1.5 - VELOZ 1.25x + 5 TRANSCRICOES EM RODIZIO TOTAL
         run: |
           cat > /tmp/dubla.py << 'PY'
           import json, asyncio, os, subprocess
 
           def get_duration(p):
-              import json as js
               r=subprocess.check_output(f'ffprobe -v error -show_entries format=duration -of json "{p}"', shell=True)
-              return float(js.loads(r)['format']['duration'])
+              return float(json.loads(r)['format']['duration'])
 
-          # CONFIG PERPETUA - MUDA AQUI A VELOCIDADE
-          VELOCIDADE_VIDEO = 1.25  # 1.25 = 25% mais rapido, 1.4 = 40% mais rapido
-          # Quanto maior, mais curto e viral
+          VELOCIDADE_VIDEO = 1.25  # 1.25 = 25% mais rapido, muda para 1.4 se quiser mais viral
 
-          try:
-              j=json.load(open("transcricoes.json", encoding="utf-8"))
-              texto=j.get("top1_es") or j.get("top1") or list(j.values())[0]
-          except:
-              texto="HOLA AMIGOS! Del 1 al 10 cuanto le dan a este trabajo? Comenta abajo."
+          j = json.load(open("transcricoes.json", encoding="utf-8"))
+          todas = [(k,v) for k,v in j.items() if k.endswith("_es") and isinstance(v,str) and len(v)>30]
+          todas.sort() # top1_es, top2_es, top3_es, top4_es, top5_es
 
-          # Texto total, sem corte
-          print(f"Transcricao total: {len(texto)} caracteres")
-          
+          print(f"Transcrições carregadas: {[k for k,v in todas]}")
+
+          hist_file="historico_4redes.json"
+          try: hist=json.load(open(hist_file))
+          except: hist=[]
+          idx = len(hist) % len(todas) if todas else 0
+          chave, texto_es = todas[idx]
+
+          tipo = j.get(chave.replace("_es","_tipo"), "geral")
+          print(f"RODIZIO PERPETUO: video {len(hist)} -> {chave} tipo={tipo}")
+          print(f"Texto: {texto_es[:150]}...")
+
           async def dub():
               import edge_tts
-              # rate +15% para falar mais rapido e acompanhar video veloz
-              await edge_tts.Communicate(texto,"es-MX-JorgeNeural",rate="+20%",volume="+10%").save("/tmp/dub.mp3")
+              await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="+15%",volume="+15%").save("/tmp/dub.mp3")
           asyncio.run(dub())
 
           dur_orig=get_duration("/tmp/original.mp4")
           dur_dub=get_duration("/tmp/dub.mp3")
-          print(f"Original {dur_orig:.1f}s | Dub {dur_dub:.1f}s")
+          dur_veloz = dur_orig / VELOCIDADE_VIDEO
+          factor = dur_dub / dur_veloz
+          factor = max(0.5, min(2.0, factor))
 
-          # 1 - Acelera VIDEO
-          dur_video_veloz = dur_orig / VELOCIDADE_VIDEO
-          print(f"Video veloz {dur_video_veloz:.1f}s com {VELOCIDADE_VIDEO}x")
+          print(f"Original {dur_orig:.1f}s | Dub {dur_dub:.1f}s | Veloz {dur_veloz:.1f}s | Factor ajuste {factor:.2f}")
 
-          # 2 - Ajusta DUB para durar exatamente o video veloz
-          # atempo = dur_dub / dur_video_veloz
-          factor = dur_dub / dur_video_veloz
-          # limita atempo entre 0.5 e 2.0
-          if factor < 0.5: factor = 0.5
-          if factor > 2.0: factor = 2.0
-
-          print(f"Fator ajuste dub: {factor:.2f}")
-
-          # Comando final: video acelerado + dub ajustada + mix perpetuo
           cmd = f'''ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex \
           "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v]; \
-           [0:a]atempo={VELOCIDADE_VIDEO},volume=0.07[bg]; \
+           [0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg]; \
            [1:a]atempo={factor},volume=2.0[voice]; \
            [bg][voice]amix=inputs=2:duration=first:dropout_transition=0" \
-          -map "[v]" -map 1:a -t {dur_video_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'''
-
+          -map "[v]" -map 1:a -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'''
           os.system(cmd)
           subprocess.run(f'ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg -loglevel error', shell=True)
-          
-          open("/tmp/legenda.txt","w", encoding="utf-8").write(texto[:400])
-          print(f"FINAL {os.path.getsize('/tmp/processed_reel.mp4')} bytes - VELOZ e DUBLADO TOTAL")
+          open("/tmp/legenda.txt","w", encoding="utf-8").write(texto_es[:400])
+          print(f"FINAL OK - {chave} VELOZ TOTAL {os.path.getsize('/tmp/processed_reel.mp4')} bytes")
           PY
           python /tmp/dubla.py
           ls -lh /tmp/*.mp4
+
+      - name: 2 - PREVIEW - Salva video pra ver antes
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-veloz-dublado
+          path: |
+            /tmp/processed_reel.mp4
+            /tmp/thumb.jpg
 
       - name: 3 - POSTA INSTAGRAM
         env:
