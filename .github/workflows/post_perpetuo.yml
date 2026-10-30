@@ -1,132 +1,67 @@
-name: post_perpetuo_multidestino
+name: post_perpetuo LATAM ES
 
 on:
   schedule:
-    - cron: '40 22 * * *' # 19:40 BRT todo dia - ajuste aqui
+    - cron: '0 17 * * *' # 11:00 MX / 12:00 CO-PE / 14:00 AR-CL
+    - cron: '0 20 * * *' # 14:00 MX / 15:00 CO-PE / 17:00 AR-CL - PICO
+    - cron: '0 1 * * *'  # 19:00 MX / 20:00 CO-PE / 22:00 AR-CL - OURO
   workflow_dispatch:
 
 jobs:
   postar:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Instala Python e FFmpeg
+      - uses: actions/checkout@v4
+      - name: Setup
         run: |
-          pip install openai requests telethon
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: 1. Puxa video TOP do Telegram
+          pip install openai instagrapi requests telethon
+          sudo apt-get install -y ffmpeg
+      - name: 1. Baixa VIDEO
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
         run: |
           cat > /tmp/baixa.py << 'PY'
-          import json, random, os
-          # Sorteia top1, top2 ou top3
-          escolha = random.choice(["top1","top2","top3"])
-          print(f"Escolhido: {escolha}")
-          with open("escolha.txt","w") as f:
-              f.write(escolha)
-          # AQUI: por enquanto usa o /tmp/original.mp4 que ja baixa do seu canal
-          # Se voce ja tem a logica de baixar do FC-FONTE, mantem ela
-          # Vou criar um placeholder - o video ja deve estar em /tmp/original.mp4 do seu workflow antigo
-          # Se nao tiver, baixa do Telegram
+          import os, random, asyncio
+          from telethon import TelegramClient
+          async def main():
+              api_id=int(os.getenv("TELEGRAM_API_ID")); api_hash=os.getenv("TELEGRAM_API_HASH"); channel=int(os.getenv("TELEGRAM_CHANNEL_ID"))
+              client=TelegramClient('/tmp/session', api_id, api_hash); await client.start()
+              msgs=await client.get_messages(channel, limit=20); videos=[m for m in msgs if m.video]
+              escolha_msg=random.choice(videos[:5]); escolha=random.choice(["top1","top2","top3"])
+              open("escolha.txt","w").write(escolha); await client.download_media(escolha_msg, "/tmp/original.mp4"); await client.disconnect()
+          asyncio.run(main())
           PY
           python /tmp/baixa.py
-          # mantem seu codigo antigo de baixar o video original pra /tmp/original.mp4
-          # ex: python seu_script_telegram.py
-          ls -lh /tmp/original.mp4 || echo "Aguardando original.mp4 do passo anterior"
-
-      - name: 2. Dublagem ES MANUAL - HOLA AMIGOS
+      - name: 2. DUBLAGEM HOLA AMIGOS - MANUAL
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          cat transcricoes.json
           cat > /tmp/dublar.py << 'PY'
-          import json, subprocess, os, random
+          import json, subprocess, os
           from openai import OpenAI
-          client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-          escolha = open("escolha.txt").read().strip()
-          dados = json.load(open("transcricoes.json"))
-          chave = f"{escolha}_es"
-          texto_es = dados.get(chave) or dados.get("top1_es")
-          print(f"DUBLANDO {escolha} com HOLA AMIGOS:")
-          print(texto_es[:200])
-
-          # Garante que começa com HOLA AMIGOS
-          if not texto_es.upper().startswith("HOLA AMIGOS"):
-              texto_es = "HOLA AMIGOS! " + texto_es
-
-          tts = client.audio.speech.create(model="tts-1", voice="onyx", input=texto_es)
-          tts.stream_to_file("/tmp/voz_es.mp3")
-          print("Voz ES gerada")
-
-          subprocess.run([
-            "ffmpeg","-i","/tmp/original.mp4","-i","/tmp/voz_es.mp3",
-            "-map","0:v","-map","1:a","-shortest",
-            "-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
-            "-c:v","libx264","-preset","ultrafast","-c:a","aac",
-            "/tmp/processed_reel.mp4","-y"
-          ], check=True)
-          print("Video final 1080x1920 pronto")
+          client=OpenAI(api_key=os.getenv("OPENAI_API_KEY")); escolha=open("escolha.txt").read().strip(); dados=json.load(open("transcricoes.json")); texto_es=dados[f"{escolha}_es"]
+          if not texto_es.upper().startswith("HOLA AMIGOS"): texto_es="HOLA AMIGOS! "+texto_es
+          tts=client.audio.speech.create(model="tts-1", voice="onyx", input=texto_es); tts.stream_to_file("/tmp/voz_es.mp3")
+          subprocess.run(["ffmpeg","-i","/tmp/original.mp4","-i","/tmp/voz_es.mp3","-map","0:v","-map","1:a","-shortest","-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920","-c:v","libx264","-preset","ultrafast","-c:a","aac","/tmp/processed_reel.mp4","-y"], check=True)
           PY
           python /tmp/dublar.py
-          ls -lh /tmp/processed_reel.mp4
-
-      - name: 3. Posta REAL multi-destino
+      - name: 3. POSTA @fc_construye - LATAM ES
         env:
-          IG_USERNAME: ${{ secrets.IG_USERNAME }}
-          IG_PASSWORD: ${{ secrets.IG_PASSWORD }}
-          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
-          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          TIKTOK_SESSION: ${{ secrets.TIKTOK_SESSION }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+          IG_USERNAME: ${{ secrets.IG_USERNAME_ES }}
+          IG_PASSWORD: ${{ secrets.IG_PASSWORD_ES }}
         run: |
           cat > /tmp/postar.py << 'PY'
-          import os, json, random
-          escolha = open("escolha.txt").read().strip()
-          dados = json.load(open("transcricoes.json"))
-          texto_es = dados.get(f"{escolha}_es")
+          import json, os
+          from instagrapi import Client
+          escolha=open("escolha.txt").read().strip(); dados=json.load(open("transcricoes.json")); texto_es=dados[f"{escolha}_es"]
+          caption=f"""{texto_es[:250]}...
 
-          caption_es = f"""{texto_es[:150]}...
+          ¿Lo harías en tu casa? Deja tu nota del 1 al 10 👇
 
-          ¿Harías esto en tu casa? 👇 Deja tu calificación del 1 al 10
-
-          #construccion #albañileria #porcelanato #mueblesdeporcelanato #obra #fcconstruye"""
-
-          print("Caption ES:")
-          print(caption_es)
-
-          # AQUI ENTRA SEU CODIGO REAL DE POSTAGEM
-          # Instagram
-          # from instagrapi import Client
-          # cl = Client(); cl.login(os.getenv("IG_USERNAME"), os.getenv("IG_PASSWORD"))
-          # cl.clip_upload("/tmp/processed_reel.mp4", caption_es)
-
-          # Facebook Reels
-          # requests.post(f"https://graph.facebook.com/{os.getenv('FB_PAGE_ID')}/video_reels"...)
-
-          # TikTok
-          # seu codigo
-
-          # Telegram backup
-          # requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendVideo"...)
-
-          print("SIMULACAO OK - troque pelos seus codigos reais de postagem")
-          with open("/tmp/caption_final.txt","w", encoding="utf-8") as f:
-              f.write(caption_es)
+          #construccion #albañileria #porcelanato #fcconstruye #latam"""
+          cl=Client(); cl.login(os.getenv("IG_USERNAME"), os.getenv("IG_PASSWORD")); cl.clip_upload("/tmp/processed_reel.mp4", caption)
+          print("Postado LATAM ES OK")
           PY
           python /tmp/postar.py
-          cat /tmp/caption_final.txt
-
-      - name: 4. Salva resultado
-        uses: actions/upload-artifact@v4
-        with:
-          name: reel-es-hola-amigos
-          path: |
-            /tmp/processed_reel.mp4
-            /tmp/caption_final.txt
-            escolha.txt
