@@ -1,10 +1,10 @@
-name: post_perpetuo LATAM ES
+name: post_perpetuo LATAM HD
 
 on:
   schedule:
-    - cron: '0 17 * * *'
-    - cron: '0 20 * * *'
-    - cron: '0 1 * * *'
+    - cron: '0 17 * * *' # 11:00 MX / 13:00 CO / 15:00 AR
+    - cron: '0 20 * * *' # 14:00 MX / 16:00 CO / 18:00 AR - PICO
+    - cron: '0 1 * * *'  # 19:00 MX / 21:00 CO / 23:00 AR - OURO
   workflow_dispatch:
 
 jobs:
@@ -16,89 +16,74 @@ jobs:
         run: |
           pip install openai instagrapi requests telethon
           sudo apt-get install -y ffmpeg
-      - name: 1. Baixa VIDEO - CORRIGIDO
+      - name: 1. Baixa VIDEO do Telegram HD - CORRIGIDO
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
           TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
         run: |
           cat > /tmp/baixa.py << 'PY'
-          import os, random, asyncio
+          import os, random, asyncio, sys
           from telethon import TelegramClient
           async def main():
               api_id = os.getenv("TELEGRAM_API_ID")
               api_hash = os.getenv("TELEGRAM_API_HASH")
-              channel = os.getenv("TELEGRAM_CHANNEL") # pode ser @nome ou -100...
-              print(f"DEBUG Secrets: API_ID existe? {bool(api_id)}, CHANNEL: {channel}")
+              channel = os.getenv("TELEGRAM_CHANNEL")
+              print(f"DEBUG -> API_ID: {api_id}, CHANNEL: {channel}, HASH existe: {bool(api_hash)}")
               if not api_id or not api_hash or not channel:
-                  print("Sem secrets Telegram, tentando usar /tmp/original.mp4 antigo ou video local")
-                  # Se ja tem video no repo, usa
-                  import pathlib
-                  if pathlib.Path("original.mp4").exists():
-                      import shutil; shutil.copy("original.mp4","/tmp/original.mp4")
-                  else:
-                      # Cria um escolha fake pra testar dublagem
-                      open("escolha.txt","w").write("top1")
-                      # Se nao tem video, baixa um placeholder dos seus tops
-                      raise Exception("Faltam TELEGRAM_API_ID / TELEGRAM_CHANNEL nos Secrets do GitHub. Vai em Settings > Secrets and variables > Actions e confere.")
-                  return
-              
-              # Converte ID só se for numero
+                  print("ERRO: Secrets vazios! Vai em Settings > Secrets and variables > Actions e cria TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL")
+                  sys.exit(1)
+              api_id = int(api_id.strip())
+              api_hash = api_hash.strip()
+              channel = channel.strip()
+              # Se for ID numerico converte, se for @nome deixa como string
               try:
-                  api_id_int = int(api_id.strip())
+                  if channel.lstrip("-").isdigit():
+                      channel = int(channel)
               except:
-                  api_id_int = int(api_id)
-              
-              client = TelegramClient('/tmp/session', api_id_int, api_hash.strip())
+                  pass
+              client = TelegramClient('/tmp/session', api_id, api_hash)
               await client.start()
-              # Aceita tanto @canal quanto ID numerico
-              try:
-                  chan_entity = int(channel) if channel.strip().lstrip("-").isdigit() else channel.strip()
-              except:
-                  chan_entity = channel.strip()
-                  
-              msgs = await client.get_messages(chan_entity, limit=20)
+              print(f"Conectado, buscando no canal {channel}...")
+              msgs = await client.get_messages(channel, limit=30)
               videos = [m for m in msgs if m.video]
+              print(f"Achados {len(videos)} videos no HD")
               if not videos:
-                  raise Exception(f"Nenhum video no canal {channel}")
-              escolha_msg = random.choice(videos[:5])
+                  raise Exception("Nenhum video no Telegram HD. Posta um video no seu canal primeiro.")
+              escolha_msg = random.choice(videos[:10])
               escolha = random.choice(["top1","top2","top3"])
-              print(f"Baixando video {escolha_msg.id} - transcricao {escolha}")
+              print(f"Baixando video id {escolha_msg.id} usando legenda {escolha}")
               open("escolha.txt","w").write(escolha)
               await client.download_media(escolha_msg, "/tmp/original.mp4")
               await client.disconnect()
+              print("Download OK")
           asyncio.run(main())
           PY
           python /tmp/baixa.py
-          ls -lh /tmp/original.mp4 || echo "original.mp4 nao encontrado"
-      - name: 2. DUBLAGEM HOLA AMIGOS
+          ls -lh /tmp/original.mp4
+      - name: 2. DUBLAGEM HOLA AMIGOS - MANUAL
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python -c "import json; d=json.load(open('transcricoes.json')); print(list(d.keys()))"
           cat > /tmp/dublar.py << 'PY'
           import json, subprocess, os
           from openai import OpenAI
-          client=OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-          escolha=open("escolha.txt").read().strip() if os.path.exists("escolha.txt") else "top1"
-          dados=json.load(open("transcricoes.json"))
-          texto_es=dados.get(f"{escolha}_es") or dados["top1_es"]
+          client=OpenAI(api_key=os.getenv("OPENAI_API_KEY")); escolha=open("escolha.txt").read().strip(); dados=json.load(open("transcricoes.json")); texto_es=dados[f"{escolha}_es"]
           if not texto_es.upper().startswith("HOLA AMIGOS"): texto_es="HOLA AMIGOS! "+texto_es
-          tts=client.audio.speech.create(model="tts-1", voice="onyx", input=texto_es)
-          tts.stream_to_file("/tmp/voz_es.mp3")
+          tts=client.audio.speech.create(model="tts-1", voice="onyx", input=texto_es); tts.stream_to_file("/tmp/voz_es.mp3")
           subprocess.run(["ffmpeg","-i","/tmp/original.mp4","-i","/tmp/voz_es.mp3","-map","0:v","-map","1:a","-shortest","-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920","-c:v","libx264","-preset","ultrafast","-c:a","aac","/tmp/processed_reel.mp4","-y"], check=True)
           PY
           python /tmp/dublar.py
-      - name: 3. POSTA @fc_construye
+      - name: 3. POSTA @fc_construye - LATAM ES
         env:
           IG_USERNAME: ${{ secrets.IG_USERNAME_ES }}
           IG_PASSWORD: ${{ secrets.IG_PASSWORD_ES }}
         run: |
           cat > /tmp/postar.py << 'PY'
-          import json, os
-          from instagrapi import Client
+          import json, os; from instagrapi import Client
           escolha=open("escolha.txt").read().strip(); dados=json.load(open("transcricoes.json")); texto_es=dados[f"{escolha}_es"]
-          caption=f"{texto_es[:250]}...\n\n¿Lo harías en tu casa? 👇\n\n#construccion #fcconstruye"
+          caption=f"{texto_es[:250]}...\n\n¿Lo harías en tu casa? Deja tu nota 1 al 10 👇\n\n#construccion #fcconstruye"
           cl=Client(); cl.login(os.getenv("IG_USERNAME"), os.getenv("IG_PASSWORD")); cl.clip_upload("/tmp/processed_reel.mp4", caption)
+          print("Postado LATAM ES - HD Telegram OK")
           PY
           python /tmp/postar.py
