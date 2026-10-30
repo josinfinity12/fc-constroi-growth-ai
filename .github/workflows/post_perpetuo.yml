@@ -1,9 +1,9 @@
-name: FC - FONTE - ID FIX FINAL
+name: FC - FONTE - CORRIGIDO COMPLETO
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 1 * * *'
-  workflow_dispatch:
 
 jobs:
   postar:
@@ -18,7 +18,7 @@ jobs:
           pip install "instagrapi[video]" requests google-api-python-client google-auth google-auth-oauthlib telethon edge-tts -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -q
 
-      - name: 1 - Baixa do FC-FONTE por ID -100
+      - name: 1 - Baixa FC-FONTE via get_messages IDS (CORRIGIDO)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
@@ -32,10 +32,8 @@ jobs:
           api_id=int(os.getenv("TELEGRAM_API_ID").strip().split(":")[0])
           api_hash=os.getenv("TELEGRAM_API_HASH").strip()
           ch_raw=(os.getenv("TELEGRAM_CHANNEL") or os.getenv("TELEGRAM_CHANNEL_BACKUP") or "").strip()
-          print(f"CHANNEL ID recebido: {ch_raw}")
-          if not ch_raw.startswith("-100"):
-            raise SystemExit(f"ID tem que começar com -100, você colocou {ch_raw}")
-          channel_id=int(ch_raw)
+          ch_id=int(ch_raw)
+          print(f"CHANNEL: {ch_id}")
           hist_file="historico_4redes.json"
           try: hist=json.load(open(hist_file))
           except: hist=[]
@@ -43,40 +41,52 @@ jobs:
             from telethon import TelegramClient
             client=TelegramClient("/tmp/bot_session", api_id, api_hash)
             await client.start(bot_token=token)
-            entity=await client.get_entity(channel_id)
-            print(f"CANAL OK: {entity.title} ID {entity.id}")
-            msgs=await client.get_messages(entity, limit=50)
-            vids=[m for m in msgs if m.video]
-            print(f"Videos: {len(vids)}")
-            if not vids: raise SystemExit("Canal sem video, posta 1 video no FC - FONTE")
+            entity=await client.get_entity(ch_id)
+            print(f"CANAL OK: {entity.title}")
+            vids=[]
+            # CORRECAO: busca por IDS (bot pode) e nao por limit (bot nao pode)
+            for batch_start in range(1, 3000, 100):
+              ids=list(range(batch_start, batch_start+100))
+              try:
+                msgs=await client.get_messages(entity, ids=ids)
+                for m in msgs:
+                  if m and m.video:
+                    vids.append(m)
+              except: pass
+              if len(vids)>=60: break
+            print(f"Videos achados: {len(vids)}")
+            if not vids: raise SystemExit("Nenhum video no FC - FONTE. Verifica se o FC Fonte Bot é admin.")
             disp=[v for v in vids if str(v.id) not in hist]
             if not disp:
               print("Reset historico"); disp=vids; hist.clear()
             import random; v=random.choice(disp)
-            print(f"Baixando {v.id} {v.video.size} bytes")
+            print(f"Baixando ID {v.id} size {v.video.size}")
             await client.download_media(v, "/tmp/original.mp4")
             hist.append(str(v.id))
             json.dump(hist[-100:], open(hist_file,"w"))
             await client.disconnect()
-            print(f"OK {os.path.getsize('/tmp/original.mp4')} bytes")
+            print(f"BAIXOU {os.path.getsize('/tmp/original.mp4')} bytes")
           asyncio.run(main())
-          open("escolha.txt","w").write("top1")
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - DUBLAGEM ES
+      - name: 1.5 - DUBLAGEM ES com transcricoes.json
         run: |
           cat > /tmp/dubla.py << 'PY'
           import json, asyncio, os
-          try: texto=json.load(open("transcricoes.json", encoding="utf-8")).get("top1_es","HOLA AMIGOS! Del 1 al 10 cuanto le dan a este trabajo?")
-          except: texto="HOLA AMIGOS! Del 1 al 10 cuanto le dan a este trabajo?"
+          try:
+            j=json.load(open("transcricoes.json", encoding="utf-8"))
+            texto=j.get("top1_es") or j.get("top1") or list(j.values())[0]
+          except:
+            texto="HOLA AMIGOS! Del 1 al 10 cuanto le dan a este trabajo?"
           texto=texto[:380]
-          print(f"DUBLANDO: {texto[:120]}")
+          print(f"Dublando: {texto[:100]}")
           async def dub():
-            import edge_tts; await edge_tts.Communicate(texto,"es-MX-JorgeNeural",rate="-8%",volume="+20%").save("/tmp/dub.mp3")
+            import edge_tts
+            await edge_tts.Communicate(texto,"es-MX-JorgeNeural",rate="-8%",volume="+20%").save("/tmp/dub.mp3")
           asyncio.run(dub())
           os.system('ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:a]volume=0.12[bg];[1:a]volume=2.0[voice];[bg][voice]amix=inputs=2:duration=longest" -c:v copy -map 0:v -map 1:a -shortest /tmp/dublado.mp4 -loglevel error')
-          os.system("cp /tmp/dublado.mp4 /tmp/original.mp4 || true")
+          os.system("cp /tmp/dublado.mp4 /tmp/original.mp4 2>/dev/null || true")
           open("/tmp/legenda.txt","w", encoding="utf-8").write(texto)
           PY
           python /tmp/dubla.py
@@ -85,6 +95,7 @@ jobs:
         run: |
           ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k /tmp/processed_reel.mp4
           ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg
+          ls -lh /tmp/*.mp4
 
       - name: 3 - POSTA INSTAGRAM
         env:
@@ -94,20 +105,23 @@ jobs:
         continue-on-error: true
         run: |
           cat > /tmp/ig.py << 'PY'
-          import os; from instagrapi import Client
+          import os
+          from instagrapi import Client
           texto=open("/tmp/legenda.txt", encoding="utf-8").read()[:180]
-          caption=f"{texto}\n\n¿Del 1 al 10? 👇\n#construccion #fcconstruye"
+          caption=f"{texto}\n\n¿Del 1 al 10? 👇\n.\n#construccion #albanil #obra #fcconstruye"
           cl=Client(); cl.delay_range=[1,3]
           try:
-            if os.getenv("IG_SESSIONID"): cl.login_by_sessionid(os.getenv("IG_SESSIONID").strip())
+            sid=os.getenv("IG_SESSIONID","").strip()
+            if sid: cl.login_by_sessionid(sid)
             else: cl.login(os.getenv("INSTAGRAM_USER"), os.getenv("INSTAGRAM_PASS"))
-          except: cl.login(os.getenv("INSTAGRAM_USER"), os.getenv("INSTAGRAM_PASS"))
+          except:
+            cl.login(os.getenv("INSTAGRAM_USER"), os.getenv("INSTAGRAM_PASS"))
           cl.clip_upload("/tmp/processed_reel.mp4", caption, thumbnail="/tmp/thumb.jpg")
           print("IG OK")
           PY
           python /tmp/ig.py
 
-      - name: 4 - POSTA FACEBOOK
+      - name: 4 - POSTA FACEBOOK (fix 400)
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
@@ -123,10 +137,11 @@ jobs:
           vid=r1["video_id"]; up_url=r1["upload_url"]
           size=os.path.getsize("/tmp/processed_reel.mp4")
           with open("/tmp/processed_reel.mp4","rb") as f:
-            requests.post(up_url, headers={"Authorization":f"OAuth {token}","file_offset":"0","file_size":str(size)}, data=f)
-          time.sleep(7)
+            res=requests.post(up_url, headers={"Authorization":f"OAuth {token}","file_offset":"0","file_size":str(size)}, data=f)
+            print(f"UPLOAD {res.status_code}")
+          time.sleep(8)
           r3=requests.post(url, data={"upload_phase":"finish","video_id":vid,"description":legenda,"access_token":token})
-          print(f"FB {r3.text[:800]}")
+          print(f"FB FINISH {r3.text[:800]}")
           PY
           python /tmp/fb.py
 
@@ -144,6 +159,7 @@ jobs:
           from googleapiclient.http import MediaFileUpload
           cid=os.getenv("YT_CLIENT_ID").strip(); csec=os.getenv("YT_CLIENT_SECRET").strip(); rtok=os.getenv("YT_REFRESH_TOKEN").strip()
           resp=requests.post("https://oauth2.googleapis.com/token", data={"client_id":cid,"client_secret":csec,"refresh_token":rtok,"grant_type":"refresh_token"}).json()
+          print(f"YT TOKEN { 'ok' if 'access_token' in resp else resp}")
           creds=Credentials(token=resp["access_token"], refresh_token=rtok, client_id=cid, client_secret=csec, token_uri="https://oauth2.googleapis.com/token")
           youtube=build("youtube","v3",credentials=creds)
           legenda=open("/tmp/legenda.txt", encoding="utf-8").read()
@@ -159,7 +175,8 @@ jobs:
         continue-on-error: true
         run: |
           cat > /tmp/tt.py << 'PY'
-          import os, requests; token=os.getenv("TIKTOK_ACCESS_TOKEN").strip()
+          import os, requests
+          token=os.getenv("TIKTOK_ACCESS_TOKEN","").strip()
           legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:150]
           r=requests.post("https://open.tiktokapis.com/v2/post/publish/video/init/", headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"}, json={"post_info":{"title":legenda,"privacy_level":"PUBLIC_TO_EVERYONE"},"source_info":{"source":"FILE_UPLOAD","video_size":os.path.getsize("/tmp/processed_reel.mp4"),"chunk_size":10000000,"total_chunk_count":1}})
           print(r.text[:1000])
@@ -168,5 +185,8 @@ jobs:
 
       - name: 7 - Salva historico
         run: |
-          git config user.name "fc-bot"; git config user.email "bot@fcconstruye.com"
-          git add historico_4redes.json || true; git commit -m "post $(date)" || true; git push || true
+          git config user.name "fc-bot"
+          git config user.email "bot@fcconstruye.com"
+          git add historico_4redes.json || true
+          git commit -m "post $(date -u)" || true
+          git push || true
