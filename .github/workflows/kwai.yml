@@ -1,32 +1,29 @@
 name: Postar no Kwai
-
 on:
   workflow_dispatch:
-    inputs:
-      video:
-        description: 'Nome do video'
-        required: false
-        default: 'video_final.mp4'
 
 jobs:
   post-kwai:
     runs-on: ubuntu-22.04
-    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           
-      - name: Instalar Playwright
+      - name: Ver arquivos
         run: |
+          ls -la
+          echo "--- kwai_uploader.py ---"
+          cat kwai_uploader.py || echo "ARQUIVO NÃO ENCONTRADO!"
+
+      - name: Instalar
+        run: |
+          python -m pip install --upgrade pip
           pip install playwright
           python -m playwright install --with-deps chromium
-          
-      - name: Rodar Bot Kwai
-        run: python kwai_uploader.py
+
+      - name: Rodar Bot
+        run: python -u kwai_uploader.py
         env:
           KWAI_COOKIES: ${{ secrets.KWAI_COOKIES }}
