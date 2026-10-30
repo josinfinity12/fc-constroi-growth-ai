@@ -14,50 +14,52 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup
         run: |
-          pip install openai instagrapi requests telethon
+          pip install openai instagrapi requests
           sudo apt-get install -y ffmpeg
-      - name: 1. Baixa VIDEO do Telegram HD - CORRIGIDO
+      - name: 1. Baixa VIDEO do Telegram HD - VIA BOT 902411
         env:
-          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
-          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL_BACKUP }}
         run: |
           cat > /tmp/baixa.py << 'PY'
-          import os, random, asyncio, sys
-          from telethon import TelegramClient
-          async def main():
-              api_id = os.getenv("TELEGRAM_API_ID")
-              api_hash = os.getenv("TELEGRAM_API_HASH")
-              channel = os.getenv("TELEGRAM_CHANNEL")
-              print(f"DEBUG -> API_ID: {api_id}, CHANNEL: {channel}, HASH existe: {bool(api_hash)}")
-              if not api_id or not api_hash or not channel:
-                  print("ERRO: Secrets vazios! Vai em Settings > Secrets and variables > Actions e cria TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL")
-                  sys.exit(1)
-              api_id = int(api_id.strip())
-              api_hash = api_hash.strip()
-              channel = channel.strip()
-              # Se for ID numerico converte, se for @nome deixa como string
-              try:
-                  if channel.lstrip("-").isdigit():
-                      channel = int(channel)
-              except:
-                  pass
-              client = TelegramClient('/tmp/session', api_id, api_hash)
-              await client.start()
-              print(f"Conectado, buscando no canal {channel}...")
-              msgs = await client.get_messages(channel, limit=30)
-              videos = [m for m in msgs if m.video]
-              print(f"Achados {len(videos)} videos no HD")
-              if not videos:
-                  raise Exception("Nenhum video no Telegram HD. Posta um video no seu canal primeiro.")
-              escolha_msg = random.choice(videos[:10])
-              escolha = random.choice(["top1","top2","top3"])
-              print(f"Baixando video id {escolha_msg.id} usando legenda {escolha}")
-              open("escolha.txt","w").write(escolha)
-              await client.download_media(escolha_msg, "/tmp/original.mp4")
-              await client.disconnect()
-              print("Download OK")
-          asyncio.run(main())
+          import os, random, requests, sys
+          token = os.getenv("TELEGRAM_BOT_TOKEN").strip()
+          channel = os.getenv("TELEGRAM_CHANNEL").strip()
+          print(f"BOT: {token[:6]}... CANAL: {channel} - Usando HD com 5 videos")
+          if not token or not channel:
+              print("ERRO: Falta TELEGRAM_BOT_TOKEN ou TELEGRAM_CHANNEL_BACKUP nos Secrets")
+              sys.exit(1)
+          
+          # Pega videos do canal FC-FONTE via BOT
+          url = f"https://api.telegram.org/bot{token}/getUpdates"
+          r = requests.get(url, params={"limit": 100})
+          data = r.json()
+          
+          file_ids = []
+          for upd in data.get("result", []):
+              post = upd.get("channel_post") or upd.get("message") or {}
+              if "video" in post:
+                  file_ids.append(post["video"]["file_id"])
+              if "document" in post and "video" in str(post["document"].get("mime_type","")):
+                  file_ids.append(post["document"]["file_id"])
+          
+          print(f"Achados {len(file_ids)} videos no seu HD -1004272")
+          if not file_ids:
+              print("Bot ainda nao viu videos. Encaminha 1 video novo pro canal FC-FONTE e roda de novo.")
+              sys.exit(1)
+          
+          file_id = random.choice(file_ids[-15:])
+          print(f"Baixando file_id {file_id[:20]}...")
+          gf = requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id": file_id}).json()
+          file_path = gf["result"]["file_path"]
+          dl_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+          
+          with open("/tmp/original.mp4","wb") as f:
+              f.write(requests.get(dl_url).content)
+          
+          escolha = random.choice(["top1","top2","top3"])
+          open("escolha.txt","w").write(escolha)
+          print(f"Download OK - {os.path.getsize('/tmp/original.mp4')/1024/1024:.1f} MB - Legenda {escolha}")
           PY
           python /tmp/baixa.py
           ls -lh /tmp/original.mp4
