@@ -2,9 +2,9 @@ name: post_perpetuo LATAM HD
 
 on:
   schedule:
-    - cron: '0 17 * * *' # 11:00 MX / 13:00 CO / 15:00 AR
-    - cron: '0 20 * * *' # 14:00 MX / 16:00 CO / 18:00 AR - PICO
-    - cron: '0 1 * * *'  # 19:00 MX / 21:00 CO / 23:00 AR - OURO
+    - cron: '0 17 * * *'
+    - cron: '0 20 * * *'
+    - cron: '0 1 * * *'
   workflow_dispatch:
 
 jobs:
@@ -13,9 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup
+      - name: Setup - FIX MOVIEPY
         run: |
-          pip install instagrapi requests
+          pip install "instagrapi[video]" requests
+          pip install --no-deps "moviepy==2.2.1"
+          pip install imageio imageio-ffmpeg
           sudo apt-get install -y ffmpeg
 
       - name: 1. Baixa VIDEO do Telegram HD - SEUS 5 VIDEOS
@@ -35,9 +37,8 @@ jobs:
               post = upd.get("channel_post") or upd.get("message") or {}
               if "video" in post:
                   file_ids.append(post["video"]["file_id"])
-          print(f"Videos no HD -1004272: {len(file_ids)}")
+          print(f"Videos no HD: {len(file_ids)}")
           if not file_ids:
-              print("Nenhum video encontrado. Encaminha mais um video pro canal FC-FONTE")
               sys.exit(1)
           fid = random.choice(file_ids[-15:])
           fp = requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id": fid}).json()["result"]["file_path"]
@@ -46,32 +47,28 @@ jobs:
               f.write(requests.get(dl).content)
           escolha = random.choice(["top1", "top2", "top3"])
           open("escolha.txt", "w").write(escolha)
-          print(f"BAIXADO OK {escolha} - {os.path.getsize('/tmp/original.mp4')/1024/1024:.1f} MB")
+          print(f"BAIXADO {escolha}")
           PY
           python /tmp/baixa.py
-          ls -lh /tmp/original.mp4
 
-      - name: 2. Prepara Reels 9:16 SEM OpenAI
+      - name: 2. Prepara Reels 9:16
         run: |
-          echo "Preparando video 9:16..."
           ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset ultrafast -c:a aac /tmp/processed_reel.mp4
-          ls -lh /tmp/processed_reel.mp4
+          # Cria thumbnail manualmente pra não depender do moviepy falhar
+          ffmpeg -y -i /tmp/processed_reel.mp4 -ss 1 -vframes 1 /tmp/thumb.jpg
+          ls -lh /tmp/processed_reel.mp4 /tmp/thumb.jpg
 
       - name: 3. POSTA @fc_construye LATAM - FIX
         env:
           INSTAGRAM_USER: ${{ secrets.INSTAGRAM_USER }}
           INSTAGRAM_PASS: ${{ secrets.INSTAGRAM_PASS }}
           IG_SESSIONID: ${{ secrets.IG_SESSIONID }}
-          IG_COOKIES: ${{ secrets.IG_COOKIES }}
         run: |
           cat > /tmp/postar.py << 'PY'
           import json, os
           from instagrapi import Client
           user = os.getenv("INSTAGRAM_USER")
           pwd = os.getenv("INSTAGRAM_PASS")
-          print(f"Tentando logar com USER: {user}")
-          if not user or not pwd:
-              raise Exception("INSTAGRAM_USER ou INSTAGRAM_PASS vazio nos Secrets")
           escolha = open("escolha.txt").read().strip()
           dados = json.load(open("transcricoes.json"))
           texto_es = dados[f"{escolha}_es"]
@@ -83,14 +80,12 @@ jobs:
           try:
               if sess:
                   cl.login_by_sessionid(sess)
-                  print("Login por SESSIONID OK")
               else:
                   cl.login(user, pwd)
-                  print("Login por USER/PASS OK")
-          except Exception as e:
-              print(f"Session falhou: {e}, tentando USER/PASS")
+          except:
               cl.login(user, pwd)
-          cl.clip_upload("/tmp/processed_reel.mp4", caption)
-          print("POSTADO LATAM HD OK - DO SEU HD COM 5 VIDEOS")
+          # Agora passa thumbnail que criamos, não deixa o moviepy quebrar
+          cl.clip_upload("/tmp/processed_reel.mp4", caption, thumbnail="/tmp/thumb.jpg")
+          print("POSTADO LATAM HD OK - FIX MOVIEPY FUNCIONOU")
           PY
           python /tmp/postar.py
