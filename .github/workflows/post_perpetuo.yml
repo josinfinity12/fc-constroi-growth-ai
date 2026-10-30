@@ -1,4 +1,4 @@
-name: FC - FONTE - FINAL 3 REDES OK
+name: FC - FONTE - VELOZ + DUBLADO TOTAL
 
 on:
   workflow_dispatch:
@@ -24,16 +24,13 @@ jobs:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
           TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
-          TELEGRAM_CHANNEL_BACKUP: ${{ secrets.TELEGRAM_CHANNEL_BACKUP }}
         run: |
           cat > /tmp/baixa.py << 'PY'
           import os, json, asyncio
           token=os.getenv("TELEGRAM_BOT_TOKEN").strip()
           api_id=int(os.getenv("TELEGRAM_API_ID").strip().split(":")[0])
           api_hash=os.getenv("TELEGRAM_API_HASH").strip()
-          ch_raw=(os.getenv("TELEGRAM_CHANNEL") or os.getenv("TELEGRAM_CHANNEL_BACKUP") or "").strip()
-          ch_id=int(ch_raw)
-          print(f"CHANNEL: {ch_id}")
+          ch_id=int(os.getenv("TELEGRAM_CHANNEL").strip())
           hist_file="historico_4redes.json"
           try: hist=json.load(open(hist_file))
           except: hist=[]
@@ -49,51 +46,82 @@ jobs:
               try:
                 msgs=await client.get_messages(entity, ids=ids)
                 for m in msgs:
-                  if m and m.video:
-                    vids.append(m)
+                  if m and m.video: vids.append(m)
               except: pass
               if len(vids)>=60: break
-            print(f"Videos achados: {len(vids)}")
-            if not vids: raise SystemExit("Nenhum video no FC - FONTE")
+            print(f"Videos: {len(vids)}")
             disp=[v for v in vids if str(v.id) not in hist]
-            if not disp:
-              print("Reset historico"); disp=vids; hist.clear()
+            if not disp: disp=vids; hist.clear()
             import random; v=random.choice(disp)
-            print(f"Baixando ID {v.id} size {v.video.size}")
             await client.download_media(v, "/tmp/original.mp4")
             hist.append(str(v.id))
             json.dump(hist[-100:], open(hist_file,"w"))
             await client.disconnect()
-            print(f"BAIXOU {os.path.getsize('/tmp/original.mp4')} bytes")
           asyncio.run(main())
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - DUBLAGEM ES com transcricoes.json
+      - name: 1.5 - VELOCIDADE + DUBLAGEM TOTAL AJUSTADA
         run: |
           cat > /tmp/dubla.py << 'PY'
-          import json, asyncio, os
+          import json, asyncio, os, subprocess
+
+          def get_duration(p):
+              import json as js
+              r=subprocess.check_output(f'ffprobe -v error -show_entries format=duration -of json "{p}"', shell=True)
+              return float(js.loads(r)['format']['duration'])
+
+          # CONFIG PERPETUA - MUDA AQUI A VELOCIDADE
+          VELOCIDADE_VIDEO = 1.25  # 1.25 = 25% mais rapido, 1.4 = 40% mais rapido
+          # Quanto maior, mais curto e viral
+
           try:
-            j=json.load(open("transcricoes.json", encoding="utf-8"))
-            texto=j.get("top1_es") or j.get("top1") or list(j.values())[0]
+              j=json.load(open("transcricoes.json", encoding="utf-8"))
+              texto=j.get("top1_es") or j.get("top1") or list(j.values())[0]
           except:
-            texto="HOLA AMIGOS! Del 1 al 10 cuanto le dan a este trabajo?"
-          texto=texto[:380]
-          print(f"Dublando: {texto[:100]}")
+              texto="HOLA AMIGOS! Del 1 al 10 cuanto le dan a este trabajo? Comenta abajo."
+
+          # Texto total, sem corte
+          print(f"Transcricao total: {len(texto)} caracteres")
+          
           async def dub():
-            import edge_tts
-            await edge_tts.Communicate(texto,"es-MX-JorgeNeural",rate="-8%",volume="+20%").save("/tmp/dub.mp3")
+              import edge_tts
+              # rate +15% para falar mais rapido e acompanhar video veloz
+              await edge_tts.Communicate(texto,"es-MX-JorgeNeural",rate="+20%",volume="+10%").save("/tmp/dub.mp3")
           asyncio.run(dub())
-          os.system('ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:a]volume=0.12[bg];[1:a]volume=2.0[voice];[bg][voice]amix=inputs=2:duration=longest" -c:v copy -map 0:v -map 1:a -shortest /tmp/dublado.mp4 -loglevel error')
-          os.system("cp /tmp/dublado.mp4 /tmp/original.mp4 2>/dev/null || true")
-          open("/tmp/legenda.txt","w", encoding="utf-8").write(texto)
+
+          dur_orig=get_duration("/tmp/original.mp4")
+          dur_dub=get_duration("/tmp/dub.mp3")
+          print(f"Original {dur_orig:.1f}s | Dub {dur_dub:.1f}s")
+
+          # 1 - Acelera VIDEO
+          dur_video_veloz = dur_orig / VELOCIDADE_VIDEO
+          print(f"Video veloz {dur_video_veloz:.1f}s com {VELOCIDADE_VIDEO}x")
+
+          # 2 - Ajusta DUB para durar exatamente o video veloz
+          # atempo = dur_dub / dur_video_veloz
+          factor = dur_dub / dur_video_veloz
+          # limita atempo entre 0.5 e 2.0
+          if factor < 0.5: factor = 0.5
+          if factor > 2.0: factor = 2.0
+
+          print(f"Fator ajuste dub: {factor:.2f}")
+
+          # Comando final: video acelerado + dub ajustada + mix perpetuo
+          cmd = f'''ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex \
+          "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v]; \
+           [0:a]atempo={VELOCIDADE_VIDEO},volume=0.07[bg]; \
+           [1:a]atempo={factor},volume=2.0[voice]; \
+           [bg][voice]amix=inputs=2:duration=first:dropout_transition=0" \
+          -map "[v]" -map 1:a -t {dur_video_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'''
+
+          os.system(cmd)
+          subprocess.run(f'ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg -loglevel error', shell=True)
+          
+          open("/tmp/legenda.txt","w", encoding="utf-8").write(texto[:400])
+          print(f"FINAL {os.path.getsize('/tmp/processed_reel.mp4')} bytes - VELOZ e DUBLADO TOTAL")
           PY
           python /tmp/dubla.py
-
-      - name: 2 - Converte 9:16 LEVE
-        run: |
-          ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4
-          ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg
           ls -lh /tmp/*.mp4
 
       - name: 3 - POSTA INSTAGRAM
@@ -120,7 +148,7 @@ jobs:
           PY
           python /tmp/ig.py
 
-      - name: 4 - POSTA FACEBOOK (CORRIGIDO SEM RUPLOAD)
+      - name: 4 - POSTA FACEBOOK
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
@@ -132,29 +160,10 @@ jobs:
           token=os.getenv("FB_PAGE_TOKEN").strip()
           legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:300]
           file_path="/tmp/processed_reel.mp4"
-          size=os.path.getsize(file_path)
-          print(f"FB DIRETO {size} bytes page {page}")
-
           url=f"https://graph-video.facebook.com/v20.0/{page}/videos"
           with open(file_path,"rb") as f:
-              r=requests.post(url, data={
-                  "description": legenda,
-                  "access_token": token
-              }, files={"source": f}, timeout=300)
-              print(f"STATUS {r.status_code}")
-              print(f"RESP {r.text[:2000]}")
-              if r.status_code==200 and "id" in r.text:
-                  print("FB OK VIA graph-video")
-                  exit(0)
-          
-          print("Tentando fallback /video_reels")
-          url2=f"https://graph.facebook.com/v20.0/{page}/video_reels"
-          with open(file_path,"rb") as f:
-              r2=requests.post(url2, data={
-                  "description": legenda,
-                  "access_token": token
-              }, files={"video_file": f}, timeout=300)
-              print(f"STATUS2 {r2.status_code} {r2.text[:2000]}")
+              r=requests.post(url, data={"description": legenda,"access_token": token}, files={"source": f}, timeout=300)
+              print(f"FB {r.status_code} {r.text[:1000]}")
           PY
           python /tmp/fb.py
 
@@ -181,24 +190,10 @@ jobs:
           PY
           python /tmp/yt.py
 
-      - name: 6 - POSTA TIKTOK
-        env:
-          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
-        continue-on-error: true
-        run: |
-          cat > /tmp/tt.py << 'PY'
-          import os, requests
-          token=os.getenv("TIKTOK_ACCESS_TOKEN","").strip()
-          legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:150]
-          r=requests.post("https://open.tiktokapis.com/v2/post/publish/video/init/", headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"}, json={"post_info":{"title":legenda,"privacy_level":"PUBLIC_TO_EVERYONE"},"source_info":{"source":"FILE_UPLOAD","video_size":os.path.getsize("/tmp/processed_reel.mp4"),"chunk_size":10000000,"total_chunk_count":1}})
-          print(r.text[:1000])
-          PY
-          python /tmp/tt.py
-
-      - name: 7 - Salva historico
+      - name: 6 - Salva historico
         run: |
           git config user.name "fc-bot"
           git config user.email "bot@fcconstruye.com"
           git add historico_4redes.json || true
-          git commit -m "post $(date -u)" || true
+          git commit -m "post veloz $(date -u)" || true
           git push || true
