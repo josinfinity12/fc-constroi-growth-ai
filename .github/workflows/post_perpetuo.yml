@@ -2,9 +2,9 @@ name: post_perpetuo LATAM HD
 
 on:
   schedule:
-    - cron: '0 17 * * *'
-    - cron: '0 20 * * *'
-    - cron: '0 1 * * *'
+    - cron: '0 17 * * *' # 11:00 MX / 13:00 CO / 15:00 AR
+    - cron: '0 20 * * *' # 14:00 MX / 16:00 CO / 18:00 AR - PICO
+    - cron: '0 1 * * *'  # 19:00 MX / 21:00 CO / 23:00 AR - OURO
   workflow_dispatch:
 
 jobs:
@@ -12,52 +12,85 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Setup
         run: |
           pip install instagrapi requests
           sudo apt-get install -y ffmpeg
-      - name: 1. Baixa do Telegram HD - SEUS 5 VIDEOS
+
+      - name: 1. Baixa VIDEO do Telegram HD - SEUS 5 VIDEOS
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL_BACKUP }}
         run: |
           cat > /tmp/baixa.py << 'PY'
           import os, random, requests, sys
-          token=os.getenv("TELEGRAM_BOT_TOKEN").strip()
-          channel=os.getenv("TELEGRAM_CHANNEL").strip()
-          url=f"https://api.telegram.org/bot{token}/getUpdates"
-          r=requests.get(url, params={"limit":100}).json()
-          file_ids=[]
-          for upd in r.get("result",[]):
-              post=upd.get("channel_post") or upd.get("message") or {}
-              if "video" in post: file_ids.append(post["video"]["file_id"])
-          print(f"Videos no seu HD -1004272: {len(file_ids)}")
-          if not file_ids: sys.exit(1)
-          fid=random.choice(file_ids[-15:])
-          fp=requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id":fid}).json()["result"]["file_path"]
-          dl=f"https://api.telegram.org/file/bot{token}/{fp}"
-          open("/tmp/original.mp4","wb").write(requests.get(dl).content)
-          escolha=random.choice(["top1","top2","top3"])
-          open("escolha.txt","w").write(escolha)
-          print(f"BAIXADO {escolha} {os.path.getsize('/tmp/original.mp4')/1024/1024:.1f} MB")
+          token = os.getenv("TELEGRAM_BOT_TOKEN").strip()
+          channel = os.getenv("TELEGRAM_CHANNEL").strip()
+          print(f"BOT {token[:6]}... CANAL {channel} - HD com 5 videos")
+          url = f"https://api.telegram.org/bot{token}/getUpdates"
+          r = requests.get(url, params={"limit": 100}).json()
+          file_ids = []
+          for upd in r.get("result", []):
+              post = upd.get("channel_post") or upd.get("message") or {}
+              if "video" in post:
+                  file_ids.append(post["video"]["file_id"])
+          print(f"Videos no HD -1004272: {len(file_ids)}")
+          if not file_ids:
+              print("Nenhum video encontrado. Encaminha mais um video pro canal FC-FONTE")
+              sys.exit(1)
+          fid = random.choice(file_ids[-15:])
+          fp = requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id": fid}).json()["result"]["file_path"]
+          dl = f"https://api.telegram.org/file/bot{token}/{fp}"
+          with open("/tmp/original.mp4", "wb") as f:
+              f.write(requests.get(dl).content)
+          escolha = random.choice(["top1", "top2", "top3"])
+          open("escolha.txt", "w").write(escolha)
+          print(f"BAIXADO OK {escolha} - {os.path.getsize('/tmp/original.mp4')/1024/1024:.1f} MB")
           PY
           python /tmp/baixa.py
-      - name: 2. Prepara Reels 9:16
+          ls -lh /tmp/original.mp4
+
+      - name: 2. Prepara Reels 9:16 SEM OpenAI
         run: |
+          echo "Preparando video 9:16..."
           ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset ultrafast -c:a aac /tmp/processed_reel.mp4
-      - name: 3. POSTA @fc_construye LATAM
+          ls -lh /tmp/processed_reel.mp4
+
+      - name: 3. POSTA @fc_construye LATAM - FIX
         env:
-          IG_USERNAME: ${{ secrets.IG_USERNAME_ES }}
-          IG_PASSWORD: ${{ secrets.IG_PASSWORD_ES }}
+          INSTAGRAM_USER: ${{ secrets.INSTAGRAM_USER }}
+          INSTAGRAM_PASS: ${{ secrets.INSTAGRAM_PASS }}
+          IG_SESSIONID: ${{ secrets.IG_SESSIONID }}
+          IG_COOKIES: ${{ secrets.IG_COOKIES }}
         run: |
           cat > /tmp/postar.py << 'PY'
-          import json, os; from instagrapi import Client
-          escolha=open("escolha.txt").read().strip(); dados=json.load(open("transcricoes.json"))
-          texto_es=dados[f"{escolha}_es"]
-          if not texto_es.upper().startswith("HOLA AMIGOS"): texto_es="HOLA AMIGOS! "+texto_es
-          caption=f"{texto_es[:280]}\n\n¿Lo harías en tu casa? 👇\n#construccion #fcconstruye"
-          cl=Client(); cl.login(os.getenv("IG_USERNAME"), os.getenv("IG_PASSWORD"))
+          import json, os
+          from instagrapi import Client
+          user = os.getenv("INSTAGRAM_USER")
+          pwd = os.getenv("INSTAGRAM_PASS")
+          print(f"Tentando logar com USER: {user}")
+          if not user or not pwd:
+              raise Exception("INSTAGRAM_USER ou INSTAGRAM_PASS vazio nos Secrets")
+          escolha = open("escolha.txt").read().strip()
+          dados = json.load(open("transcricoes.json"))
+          texto_es = dados[f"{escolha}_es"]
+          if not texto_es.upper().startswith("HOLA AMIGOS"):
+              texto_es = "HOLA AMIGOS! " + texto_es
+          caption = f"{texto_es[:280]}\n\n¿Lo harías en tu casa? Deja tu nota 1 al 10 👇\n\n#construccion #fcconstruye"
+          cl = Client()
+          sess = os.getenv("IG_SESSIONID")
+          try:
+              if sess:
+                  cl.login_by_sessionid(sess)
+                  print("Login por SESSIONID OK")
+              else:
+                  cl.login(user, pwd)
+                  print("Login por USER/PASS OK")
+          except Exception as e:
+              print(f"Session falhou: {e}, tentando USER/PASS")
+              cl.login(user, pwd)
           cl.clip_upload("/tmp/processed_reel.mp4", caption)
-          print("POSTADO LATAM HD OK")
+          print("POSTADO LATAM HD OK - DO SEU HD COM 5 VIDEOS")
           PY
           python /tmp/postar.py
