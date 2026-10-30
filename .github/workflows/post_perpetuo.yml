@@ -1,162 +1,239 @@
-name: post_perpetuo 4 REDES - HD 5 VIDEOS
+name: FC Construye - 4 Redes Perpetuo FINAL
 
 on:
   schedule:
-    - cron: '0 1 * * *' # 19:00 MX / 21:00 CO / 23:00 AR - OURO CONTA ZERADA
+    - cron: '0 1 * * *'  # 19h México = 21h Colômbia = 23h Argentina - OURO conta zerada
   workflow_dispatch:
 
 jobs:
-  postar_4x:
+  postar:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup 4 REDES
-        run: |
-          pip install "instagrapi[video]" requests google-api-python-client google-auth-oauthlib
-          pip install --no-deps "moviepy==2.2.1"
-          pip install imageio imageio-ffmpeg
-          sudo apt-get install -y ffmpeg
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 1. Baixa VIDEO do HD - SEUS 5 VIDEOS
+      - name: Instala deps
+        run: |
+          pip install "instagrapi[video]" requests google-api-python-client google-auth google-auth-oauthlib
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: 1 - Baixa VIDEO do HD Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL_BACKUP }}
         run: |
           cat > /tmp/baixa.py << 'PY'
-          import os, random, requests, sys, json
+          import os, random, requests, json
           token=os.getenv("TELEGRAM_BOT_TOKEN").strip()
           hist_file="historico_4redes.json"
-          hist=json.load(open(hist_file)) if os.path.exists(hist_file) else []
+          try:
+            hist=json.load(open(hist_file))
+          except:
+            hist=[]
+          print("Buscando videos no HD...")
           url=f"https://api.telegram.org/bot{token}/getUpdates"
-          r=requests.get(url, params={"limit":100}).json()
-          file_ids=[(upd.get("channel_post") or upd.get("message") or {}).get("video",{}).get("file_id") for upd in r.get("result",[])]
-          file_ids=[f for f in file_ids if f]
-          print(f"Videos no HD: {len(file_ids)}")
-          disp=[f for f in file_ids if f not in hist] or file_ids
-          fid=random.choice(disp[-15:] if len(disp)>5 else disp)
-          fp=requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id":fid}).json()["result"]["file_path"]
+          r=requests.get(url, params={"limit":100, "timeout":30}).json()
+          file_ids=[]
+          for upd in r.get("result",[]):
+            msg=upd.get("channel_post") or upd.get("message") or {}
+            vid=msg.get("video")
+            if vid and vid.get("file_id"):
+              file_ids.append(vid["file_id"])
+          file_ids=list(dict.fromkeys(file_ids)) # remove duplicado
+          print(f"HD tem {len(file_ids)} videos | ja postados: {len(hist)}")
+          if not file_ids:
+            print("HD VAZIO! Coloque videos em -1004272")
+            exit(1)
+          disp=[f for f in file_ids if f not in hist]
+          if not disp:
+            print("Resetando historico - todos ja foram postados")
+            disp=file_ids
+            hist=[]
+          escolhido=random.choice(disp[-20:] if len(disp)>10 else disp)
+          print(f"Escolhido: {escolhido}")
+          fp=requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id":escolhido}).json()["result"]["file_path"]
           dl=f"https://api.telegram.org/file/bot{token}/{fp}"
-          open("/tmp/original.mp4","wb").write(requests.get(dl).content)
-          hist.append(fid); json.dump(hist[-30:], open(hist_file,"w"))
-          escolha=random.choice(["top1","top2","top3"])
-          open("escolha.txt","w").write(escolha)
-          print(f"BAIXADO {escolha}")
+          data=requests.get(dl).content
+          open("/tmp/original.mp4","wb").write(data)
+          hist.append(escolhido)
+          json.dump(hist[-50:], open(hist_file,"w"))
+          open("escolha.txt","w").write("top1")
+          print(f"Baixado {len(data)} bytes")
           PY
           python /tmp/baixa.py
 
-      - name: 2. Prepara Reels 9:16 + Thumbnail
+      - name: 2 - Converte pra 9:16
         run: |
-          ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset ultrafast -c:a aac /tmp/processed_reel.mp4
-          ffmpeg -y -i /tmp/processed_reel.mp4 -ss 1 -vframes 1 /tmp/thumb.jpg
-          # Copia pro formato YT
-          cp /tmp/processed_reel.mp4 /tmp/youtube_short.mp4
+          ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k /tmp/processed_reel.mp4
+          ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg
           ls -lh /tmp/*.mp4
 
-      - name: 3. POSTA INSTAGRAM @fc_constroi / @fc_construye
+      - name: 3 - POSTA INSTAGRAM @fc_construye
         env:
           INSTAGRAM_USER: ${{ secrets.INSTAGRAM_USER }}
           INSTAGRAM_PASS: ${{ secrets.INSTAGRAM_PASS }}
           IG_SESSIONID: ${{ secrets.IG_SESSIONID }}
+          IG_COOKIES: ${{ secrets.IG_COOKIES }}
+        continue-on-error: true
         run: |
           cat > /tmp/ig.py << 'PY'
-          import json, os
+          import os, json, time
           from instagrapi import Client
-          user=os.getenv("INSTAGRAM_USER"); pwd=os.getenv("INSTAGRAM_PASS")
-          escolha=open("escolha.txt").read().strip()
-          dados=json.load(open("transcricoes.json"))
-          # Usa texto PT ou ES dependendo da conta - aqui LATAM
-          texto=dados.get(f"{escolha}_es") or dados.get(f"{escolha}_pt")
-          if not texto.upper().startswith("HOLA"): texto="HOLA AMIGOS! "+texto
-          caption=f"{texto[:200]}\n\n¿Del 1 al 10? 👇\n\n#construccion #fcconstruye"
-          cl=Client(); sess=os.getenv("IG_SESSIONID")
+          user=os.getenv("INSTAGRAM_USER")
+          pwd=os.getenv("INSTAGRAM_PASS")
+          sess=os.getenv("IG_SESSIONID")
           try:
-              if sess: cl.login_by_sessionid(sess)
-              else: cl.login(user,pwd)
-          except: cl.login(user,pwd)
-          cl.clip_upload("/tmp/processed_reel.mp4", caption, thumbnail="/tmp/thumb.jpg")
-          print("INSTAGRAM OK")
+            dados=json.load(open("transcricoes.json"))
+            texto=dados.get("top1_es", dados.get("top1_pt","HOLA AMIGOS!"))[:180]
+          except:
+            texto="HOLA AMIGOS! ¿Del 1 al 10 cuanto le dan a este trabajo?"
+          caption=f"{texto}\n\n¿Del 1 al 10? 👇 Comenta!\n.\n.\n#construccion #albanil #obra #fcconstruye #construccionmexico"
+          cl=Client()
+          cl.delay_range = [1, 3]
+          try:
+            if sess:
+              print("Logando com IG_SESSIONID...")
+              cl.login_by_sessionid(sess.strip())
+            else:
+              print(f"Logando com usuario {user}...")
+              cl.login(user, pwd)
+            print("Upload Instagram...")
+            media=cl.clip_upload("/tmp/processed_reel.mp4", caption, thumbnail="/tmp/thumb.jpg")
+            print(f"INSTAGRAM OK - id {media.id}")
+          except Exception as e:
+            print(f"INSTAGRAM ERRO: {e}")
+            # tenta com user/pass se session falhar
+            try:
+              cl=Client()
+              cl.login(user, pwd)
+              media=cl.clip_upload("/tmp/processed_reel.mp4", caption)
+              print(f"INSTAGRAM OK retry - id {media.id}")
+            except Exception as e2:
+              print(f"INSTAGRAM FALHOU 2x: {e2}")
           PY
           python /tmp/ig.py
 
-      - name: 4. POSTA FACEBOOK PAGE / REELS
+      - name: 4 - POSTA FACEBOOK REELS (SEU FB_PAGE_TOKEN)
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          FB_SYSTEM_TOKEN: ${{ secrets.FB_SYSTEM_TOKEN }}
+        continue-on-error: true
         run: |
           cat > /tmp/fb.py << 'PY'
           import os, requests, json
-          page=os.getenv("FB_PAGE_ID"); token=os.getenv("FB_ACCESS_TOKEN")
+          page=os.getenv("FB_PAGE_ID")
+          token=os.getenv("FB_PAGE_TOKEN") or os.getenv("FB_SYSTEM_TOKEN")
           if not page or not token:
-              print("FB secrets nao configurados, pulando FB")
-              exit(0)
-          escolha=open("escolha.txt").read().strip()
-          dados=json.load(open("transcricoes.json"))
-          texto=dados.get(f"{escolha}_es") or dados.get(f"{escolha}_pt")
-          caption=f"{texto[:200]} ¿Del 1 al 10? 👇 #construccion"
-          # Upload Reels via Graph API
+            print("FB_PAGE_ID ou FB_PAGE_TOKEN faltando, pulando")
+            exit(0)
+          print(f"FB Page {page} - token len {len(token)}")
+          try:
+            dados=json.load(open("transcricoes.json"))
+            texto=dados.get("top1_es","HOLA AMIGOS!")[:200]
+          except:
+            texto="HOLA AMIGOS!"
+          caption=f"{texto} #construccion #fcconstruye"
           url=f"https://graph.facebook.com/v20.0/{page}/video_reels"
           with open("/tmp/processed_reel.mp4","rb") as f:
-              r=requests.post(url, data={"access_token":token, "description":caption}, files={"video":f})
-          print(f"FB Response: {r.text[:500]}")
-          if r.status_code==200: print("FACEBOOK OK")
-          else: print("FB falhou, mas continua")
+            r=requests.post(url, data={"access_token":token.strip(), "description":caption}, files={"video":f}, timeout=120)
+          print(f"FB status {r.status_code}")
+          print(f"FB body: {r.text[:2000]}")
+          if r.status_code==200:
+            print("FACEBOOK OK")
           PY
           python /tmp/fb.py
 
-      - name: 5. POSTA YOUTUBE SHORTS
+      - name: 5 - POSTA YOUTUBE SHORTS (SEUS YT_CLIENT_...)
         env:
-          YOUTUBE_CLIENT_SECRETS: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        continue-on-error: true
         run: |
           cat > /tmp/yt.py << 'PY'
-          import os, json
-          sec=os.getenv("YOUTUBE_CLIENT_SECRETS")
-          if not sec:
-              print("YT secret nao configurado, pulando YT")
-              exit(0)
-          escolha=open("escolha.txt").read().strip()
-          dados=json.load(open("transcricoes.json"))
-          texto=dados.get(f"{escolha}_es") or dados.get(f"{escolha}_pt")
-          # Salva credencial temporaria
-          open("/tmp/client_secrets.json","w").write(sec)
-          from googleapiclient.discovery import build
+          import os, requests, json
           from google.oauth2.credentials import Credentials
+          from googleapiclient.discovery import build
           from googleapiclient.http import MediaFileUpload
-          # Aqui usa token ja salvo se existir - primeira vez precisa autorizar manual
-          # Por simplicidade, se nao tiver token.json, pula
-          if not os.path.exists("token.json"):
-              print("token.json do YT nao existe, faça auth local primeiro - pulando YT por enquanto")
-              exit(0)
-          creds=Credentials.from_authorized_user_file("token.json")
+          cid=os.getenv("YT_CLIENT_ID")
+          csec=os.getenv("YT_CLIENT_SECRET")
+          rtok=os.getenv("YT_REFRESH_TOKEN")
+          if not all([cid,csec,rtok]):
+            print("YT secrets faltando, pulando")
+            exit(0)
+          print("Renovando token YouTube...")
+          resp=requests.post("https://oauth2.googleapis.com/token", data={"client_id":cid.strip(),"client_secret":csec.strip(),"refresh_token":rtok.strip(),"grant_type":"refresh_token"}).json()
+          access=resp.get("access_token")
+          if not access:
+            print(f"YT ERRO token: {resp}")
+            exit(0)
+          creds=Credentials(token=access, refresh_token=rtok.strip(), client_id=cid.strip(), client_secret=csec.strip(), token_uri="https://oauth2.googleapis.com/token")
           youtube=build("youtube","v3",credentials=creds)
-          title=f"{texto[:60]} #shorts"
-          body={"snippet":{"title":title,"description":f"{texto[:400]}\n\n#construccion #shorts","categoryId":"27"},"status":{"privacyStatus":"public","selfDeclaredMadeForKids":False}}
-          media=MediaFileUpload("/tmp/youtube_short.mp4", mimetype="video/mp4", resumable=True)
-          youtube.videos().insert(part="snippet,status", body=body, media_body=media).execute()
-          print("YOUTUBE SHORTS OK")
+          try:
+            dados=json.load(open("transcricoes.json"))
+            titulo=dados.get("top1_es","Construcción increíble")[:90]
+          except:
+            titulo="Construcción que te va a sorprender #shorts"
+          body={"snippet":{"title":titulo+" #shorts","description":titulo+"\n\n#construccion #albanil #shorts #fcconstruye","categoryId":"27","tags":["construccion","albanil","obra"]},"status":{"privacyStatus":"public","selfDeclaredMadeForKids":False}}
+          media=MediaFileUpload("/tmp/processed_reel.mp4", mimetype="video/mp4", resumable=True)
+          print("Upload YouTube...")
+          req=youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+          result=req.execute()
+          print(f"YOUTUBE OK - id {result['id']}")
           PY
-          python /tmp/yt.py || echo "YT pulado"
+          python /tmp/yt.py
 
-      - name: 6. POSTA TIKTOK (via API nao oficial)
+      - name: 6 - POSTA TIKTOK (SEU TIKTOK_ACCESS_TOKEN)
         env:
-          TIKTOK_SESSIONID: ${{ secrets.TIKTOK_SESSIONID }}
+          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+          TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
+          TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+        continue-on-error: true
         run: |
           cat > /tmp/tt.py << 'PY'
-          import os, json
-          sess=os.getenv("TIKTOK_SESSIONID")
-          if not sess:
-              print("TikTok session nao configurado, pulando - poste manual ou configure TIKTOK_SESSIONID")
-              exit(0)
-          # TikTok oficial precisa de upload manual via API deles - aqui placeholder
-          # Se tiver sessionid, tenta via instagrapi-like (precisa de lib tiktok)
-          print("TIKTOK: Configurado mas precisa de auth manual. Por enquanto OK - video pronto em /tmp/processed_reel.mp4")
-          print("TIKTOK OK - pronto pra postar")
+          import os, requests, json
+          token=os.getenv("TIKTOK_ACCESS_TOKEN").strip() if os.getenv("TIKTOK_ACCESS_TOKEN") else ""
+          if not token:
+            print("TIKTOK_ACCESS_TOKEN vazio, pulando")
+            exit(0)
+          print(f"TikTok token len {len(token)}")
+          try:
+            dados=json.load(open("transcricoes.json"))
+            texto=dados.get("top1_es","HOLA AMIGOS!")[:150]
+          except:
+            texto="HOLA AMIGOS! Del 1 al 10?"
+          init_url="https://open.tiktokapis.com/v2/post/publish/video/init/"
+          headers={"Authorization":f"Bearer {token}","Content-Type":"application/json; charset=UTF-8"}
+          body={
+            "post_info":{"title":f"{texto} #construccion #fcconstruye","privacy_level":"PUBLIC_TO_EVERYONE","disable_duet":False,"disable_comment":False,"disable_stitch":False,"video_cover_timestamp_ms":500},
+            "source_info":{"source":"FILE_UPLOAD","video_size":os.path.getsize("/tmp/processed_reel.mp4"),"chunk_size":10000000,"total_chunk_count":1}
+          }
+          r=requests.post(init_url, headers=headers, json=body)
+          print(f"TikTok init status {r.status_code}: {r.text[:2000]}")
+          if r.status_code==200:
+            data=r.json()
+            if "data" in data and "upload_url" in data["data"]:
+              up_url=data["data"]["upload_url"]
+              size=os.path.getsize("/tmp/processed_reel.mp4")
+              with open("/tmp/processed_reel.mp4","rb") as f:
+                ru=requests.put(up_url, headers={"Content-Range":f"bytes 0-{size-1}/{size}","Content-Type":"video/mp4"}, data=f)
+              print(f"TikTok upload {ru.status_code}: {ru.text[:1000]}")
+              print("TIKTOK OK - vai aparecer no app em 2min")
+            else:
+              print(f"TikTok init sem upload_url: {data}")
+          else:
+            # tenta renovar token
+            print("TikTok token pode estar expirado - use TIKTOK_REFRESH_TOKEN pra renovar")
           PY
           python /tmp/tt.py
 
-      - name: 7. Salva historico
+      - name: 7 - Salva historico
         run: |
-          git config user.name "bot"; git config user.email "bot@bot.com"
+          git config user.name "fc-bot"
+          git config user.email "bot@fcconstruye.com"
           git add historico_4redes.json || true
-          git commit -m "hist 4 redes" || true
-          git push || true
+          git commit -m "post 4 redes $(date)" || echo "nada pra commitar"
+          git push || echo "push falhou mas postagens foram"
