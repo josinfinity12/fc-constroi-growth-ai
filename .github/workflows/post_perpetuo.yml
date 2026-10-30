@@ -7,7 +7,7 @@ on:
 
 jobs:
   postar:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -15,8 +15,7 @@ jobs:
 
       - name: Instala deps
         run: |
-          pip install "instagrapi[video]" requests google-api-python-client google-auth google-auth-oauthlib telethon edge-tts openai-whisper torch playwright -q
-          python -m playwright install --with-deps chromium
+          pip install "instagrapi[video]" requests google-api-python-client google-auth google-auth-oauthlib telethon edge-tts openai-whisper torch -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -q
 
       - name: 1 - Baixa FC-FONTE via get_messages IDS
@@ -63,7 +62,7 @@ jobs:
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - MATCH INTELIGENTE FACHADA/COZINHA + VELOZ 1.25x
+      - name: 1.5 - MATCH INTELIGENTE + VELOZ 1.25x
         run: |
           cat > /tmp/dubla.py << 'PY'
           import json, asyncio, os, subprocess
@@ -71,75 +70,48 @@ jobs:
               r=subprocess.check_output(f'ffprobe -v error -show_entries format=duration -of json "{p}"', shell=True)
               return float(json.loads(r)['format']['duration'])
           VELOCIDADE_VIDEO = 1.25
-          print("Detectando tipo do video original...")
           try:
               import whisper
               model = whisper.load_model("tiny")
               result = model.transcribe("/tmp/original.mp4", language="pt", fp16=False)
               texto_orig = result["text"].lower()
-              print(f"ORIGINAL DETECTADO: {texto_orig[:300]}")
-          except Exception as e:
-              print(f"Whisper erro: {e}")
-              texto_orig = ""
+          except: texto_orig = ""
           j = json.load(open("transcricoes.json", encoding="utf-8"))
           texto_es = ""; chave = ""
-          if any(k in texto_orig for k in ["fachada", "muro", "trilliza", "trigêmea", "tijolo baiano", "arandela", "torre"]):
-              chave = "top4_es"; texto_es = j.get("top4_es", "")
-              print("=> DETECTADO: FACHADA -> usando top4_es")
-          elif any(k in texto_orig for k in ["gaveta", "aluminio", "cantoneira", "pu 40", "bordinha", "45 grau"]):
-              chave = "top5_es"; texto_es = j.get("top5_es", "")
-              print("=> DETECTADO: GAVETAS ALUMINIO -> usando top5_es")
-          elif any(k in texto_orig for k in ["cozinha", "cocina", "porcelanato", "repisa", "remetimiento", "fregadero"]):
-              chave = "top2_es"; texto_es = j.get("top2_es", "")
-              print("=> DETECTADO: COZINHA -> usando top2_es")
-          elif any(k in texto_orig for k in ["closet", "ropero", "termite", "salitre", "moho", "rinitis"]):
-              chave = "top3_es"; texto_es = j.get("top3_es", "")
-              print("=> DETECTADO: CLOSET -> usando top3_es")
-          elif any(k in texto_orig for k in ["gabinete", "sobrante", "lavabo", "pasta automotiva"]):
-              chave = "top1_es"; texto_es = j.get("top1_es", "")
-              print("=> DETECTADO: GABINETE BANHO -> usando top1_es")
+          if any(k in texto_orig for k in ["fachada", "muro", "trilliza", "tijolo baiano", "arandela"]): chave="top4_es"; texto_es=j.get("top4_es","")
+          elif any(k in texto_orig for k in ["gaveta", "aluminio", "cantoneira", "pu 40"]): chave="top5_es"; texto_es=j.get("top5_es","")
+          elif any(k in texto_orig for k in ["cozinha", "cocina", "porcelanato", "repisa"]): chave="top2_es"; texto_es=j.get("top2_es","")
+          elif any(k in texto_orig for k in ["closet", "ropero", "termite", "salitre"]): chave="top3_es"; texto_es=j.get("top3_es","")
+          elif any(k in texto_orig for k in ["gabinete", "sobrante", "lavabo"]): chave="top1_es"; texto_es=j.get("top1_es","")
           if not texto_es:
-              todas = [(k,v) for k,v in j.items() if k.endswith("_es") and isinstance(v,str) and len(v)>30]
-              todas.sort()
-              hist_file="historico_4redes.json"
-              try: hist=json.load(open(hist_file))
+              todas=[(k,v) for k,v in j.items() if k.endswith("_es") and len(v)>30]; todas.sort()
+              try: hist=json.load(open("historico_4redes.json"))
               except: hist=[]
-              idx = len(hist) % len(todas) if todas else 0
+              idx=len(hist)%len(todas) if todas else 0
               chave, texto_es = todas[idx]
-              print(f"=> FALLBACK rodizio {chave}")
-          print(f"FINAL ESCOLHIDO: {chave}")
+          print(f"ESCOLHIDO: {chave}")
           async def dub():
               import edge_tts
               await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="+15%",volume="+15%").save("/tmp/dub.mp3")
           asyncio.run(dub())
-          dur_orig=get_duration("/tmp/original.mp4")
-          dur_dub=get_duration("/tmp/dub.mp3")
-          dur_veloz = dur_orig / VELOCIDADE_VIDEO
-          factor = dur_dub / dur_veloz
-          factor = max(0.5, min(2.0, factor))
-          print(f"Dur orig {dur_orig:.1f} dub {dur_dub:.1f} veloz {dur_veloz:.1f} factor {factor:.2f}")
-          cmd = f'''ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex \
-          "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v]; \
-           [0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg]; \
-           [1:a]atempo={factor},volume=2.0[voice]; \
-           [bg][voice]amix=inputs=2:duration=first" \
-          -map "[v]" -map 1:a -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'''
+          dur_orig=get_duration("/tmp/original.mp4"); dur_dub=get_duration("/tmp/dub.mp3")
+          dur_veloz=dur_orig/VELOCIDADE_VIDEO; factor=max(0.5,min(2.0,dur_dub/dur_veloz))
+          cmd=f'''ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v];[0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg];[1:a]atempo={factor},volume=2.0[voice];[bg][voice]amix=inputs=2:duration=first" -map "[v]" -map 1:a -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'''
           os.system(cmd)
           subprocess.run(f'ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg -loglevel error', shell=True)
           open("/tmp/legenda.txt","w", encoding="utf-8").write(texto_es[:400])
-          size = os.path.getsize("/tmp/processed_reel.mp4")
-          print(f"OK MATCH {chave} VELOZ {size} bytes")
+          print(f"OK VELOZ {os.path.getsize('/tmp/processed_reel.mp4')} bytes")
           PY
           python /tmp/dubla.py
-          ls -lh /tmp/*.mp4
 
-      - name: 2 - PREVIEW - Salva video pra ver antes
+      - name: 2 - PREVIEW - Video pra Kwai manual
         uses: actions/upload-artifact@v4
         with:
-          name: video-match-veloz
+          name: video-match-veloz-PRONTO-KWAI
           path: |
             /tmp/processed_reel.mp4
             /tmp/thumb.jpg
+            /tmp/legenda.txt
 
       - name: 3 - POSTA INSTAGRAM
         env:
@@ -149,8 +121,7 @@ jobs:
         continue-on-error: true
         run: |
           cat > /tmp/ig.py << 'PY'
-          import os
-          from instagrapi import Client
+          import os; from instagrapi import Client
           texto=open("/tmp/legenda.txt", encoding="utf-8").read()[:180]
           caption=f"{texto}\n\n¿Del 1 al 10? 👇\n#construccion #fcconstruye"
           cl=Client(); cl.delay_range=[1,3]
@@ -158,8 +129,7 @@ jobs:
             sid=os.getenv("IG_SESSIONID","").strip()
             if sid: cl.login_by_sessionid(sid)
             else: cl.login(os.getenv("INSTAGRAM_USER"), os.getenv("INSTAGRAM_PASS"))
-          except:
-            cl.login(os.getenv("INSTAGRAM_USER"), os.getenv("INSTAGRAM_PASS"))
+          except: cl.login(os.getenv("INSTAGRAM_USER"), os.getenv("INSTAGRAM_PASS"))
           cl.clip_upload("/tmp/processed_reel.mp4", caption, thumbnail="/tmp/thumb.jpg")
           print("IG OK")
           PY
@@ -173,14 +143,12 @@ jobs:
         run: |
           cat > /tmp/fb.py << 'PY'
           import os, requests
-          page=os.getenv("FB_PAGE_ID").strip()
-          token=os.getenv("FB_PAGE_TOKEN").strip()
+          page=os.getenv("FB_PAGE_ID").strip(); token=os.getenv("FB_PAGE_TOKEN").strip()
           legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:300]
-          file_path="/tmp/processed_reel.mp4"
           url=f"https://graph-video.facebook.com/v20.0/{page}/videos"
-          with open(file_path,"rb") as f:
+          with open("/tmp/processed_reel.mp4","rb") as f:
               r=requests.post(url, data={"description": legenda,"access_token": token}, files={"source": f}, timeout=300)
-              print(f"FB {r.status_code} {r.text[:1000]}")
+              print(f"FB {r.status_code} {r.text[:500]}")
           PY
           python /tmp/fb.py
 
@@ -207,82 +175,10 @@ jobs:
           PY
           python /tmp/yt.py
 
-      - name: 6 - POSTA KWAI 🟢 NOVO
-        env:
-          KWAI_COOKIES: ${{ secrets.KWAI_COOKIES }}
-        continue-on-error: true
-        run: |
-          cat > /tmp/kwai.py << 'PY'
-          import os, asyncio
-          from pathlib import Path
-          from playwright.async_api import async_playwright
-          print("=== KWAI POST ===")
-          cookies_str=os.getenv("KWAI_COOKIES","")
-          if len(cookies_str)<20:
-              print("KWAI_COOKIES vazio"); exit(0)
-          cookies=[]
-          for item in cookies_str.split(";"):
-              if "=" in item:
-                  try:
-                      n,v=item.strip().split("=",1)
-                      cookies.append({"name":n.strip(),"value":v.strip(),"domain":".kwai.com","path":"/"})
-                  except: pass
-          legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:300]
-          video="/tmp/processed_reel.mp4"
-          async def run():
-              async with async_playwright() as p:
-                  browser=await p.chromium.launch(headless=True)
-                  ctx=await browser.new_context()
-                  await ctx.add_cookies(cookies)
-                  page=await ctx.new_page()
-                  await page.goto("https://www.kwai.com", wait_until="domcontentloaded", timeout=30000)
-                  await page.wait_for_timeout(4000)
-                  print(f"Logado Kwai: {await page.title()}")
-                  # Vai pra pagina de upload
-                  await page.goto("https://www.kwai.com/create", wait_until="domcontentloaded")
-                  await page.wait_for_timeout(5000)
-                  await page.screenshot(path="/tmp/kwai_tela.png")
-                  file_input=await page.query_selector('input[type="file"]')
-                  if not file_input:
-                      print("Sem input file - layout mudou, mas login OK")
-                      print(await page.content()[:2000])
-                  else:
-                      print("Enviando video pro Kwai...")
-                      await file_input.set_input_files(video)
-                      await page.wait_for_timeout(12000)
-                      try:
-                          await page.fill('textarea', legenda, timeout=8000)
-                          print("Legenda Kwai OK")
-                      except: print("Sem textarea legenda")
-                      await page.screenshot(path="/tmp/kwai_upload.png")
-                      # Tenta achar botao Publicar
-                      try:
-                          btn=await page.query_selector('button:has-text("Publicar"), button:has-text("Publish")')
-                          if btn:
-                              await btn.click()
-                              print("Botao Publicar clicado!")
-                              await page.wait_for_timeout(8000)
-                          else: print("Botao publicar nao achado - post manual necessario")
-                      except Exception as e: print(f"Erro botao: {e}")
-                  await browser.close()
-                  print("KWAI FIM")
-          asyncio.run(run())
-          PY
-          python /tmp/kwai.py
-          ls -lh /tmp/kwai*.png || true
-
-      - name: 6.5 - Upload prova Kwai
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: prova-kwai
-          path: /tmp/kwai*.png
-          if-no-files-found: ignore
-
-      - name: 7 - Salva historico
+      - name: 6 - Salva historico
         run: |
           git config user.name "fc-bot"
           git config user.email "bot@fcconstruye.com"
           git add historico_4redes.json || true
-          git commit -m "post 5 redes match veloz $(date -u)" || true
+          git commit -m "post 3 redes + kwai manual $(date -u)" || true
           git push || true
