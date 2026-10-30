@@ -1,9 +1,13 @@
-name: FC Construye - PERPETUO 4 REDES + DUBLAGEM
+name: FC Construye - FINAL CORRIGIDO
 
 on:
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:
+
+concurrency:
+  group: fc-postar-unico
+  cancel-in-progress: true
 
 jobs:
   postar:
@@ -13,10 +17,10 @@ jobs:
 
       - name: Instala tudo
         run: |
-          pip install "instagrapi[video]" requests google-api-python-client google-auth edge-tts gTTS -q
+          pip install "instagrapi[video]" requests google-api-python-client google-auth edge-tts -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -q
 
-      - name: 1 - Baixa VIDEO do HD
+      - name: 1 - Baixa VIDEO e ESCOLHE top
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
@@ -33,85 +37,70 @@ jobs:
             v=msg.get("video")
             if v and v.get("file_id"): file_ids.append(v["file_id"])
           file_ids=list(dict.fromkeys(file_ids))
-          print(f"HD: {len(file_ids)} videos | Historico: {len(hist)}")
           disp=[f for f in file_ids if f not in hist] or file_ids
-          if len(disp)==len(file_ids) and len(hist)>0: hist=[] # reset se acabou
-          escolhido=random.choice(disp[-20:] if len(disp)>10 else disp)
+          if len(disp)==len(file_ids) and len(hist)>0: hist=[]
+          # ESCOLHE top1/top2/top3 e pega o video correspondente - FIX DUBLAGEM ERRADA
+          escolha=random.choice(["top1","top2","top3"])
+          # pega dos ultimos 3 videos pra bater com transcricao
+          if len(disp)>=3:
+            mapa={"top1": disp[-3], "top2": disp[-2], "top3": disp[-1]}
+            escolhido=mapa[escolha]
+          else:
+            escolhido=random.choice(disp)
+          print(f"ESCOLHA {escolha} VIDEO {escolhido[:10]}...")
           fp=requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id":escolhido}).json()["result"]["file_path"]
           dl=f"https://api.telegram.org/file/bot{token}/{fp}"
           open("/tmp/original.mp4","wb").write(requests.get(dl).content)
           hist.append(escolhido)
           json.dump(hist[-60:], open(hist_file,"w"))
-          # Sorteia qual transcricao usar
-          import random as rd
-          escolha=rd.choice(["top1","top2","top3"])
           open("escolha.txt","w").write(escolha)
-          print(f"Escolhido {escolhido} | transcricao {escolha}")
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - DUBLA TRANSCRICAO CERTINHA ES-MX
+      - name: 1.5 - DUBLA ES-MX-JORGE COM TRANSCRICAO CERTA
         run: |
           cat > /tmp/dubla.py << 'PY'
-          import json, os, asyncio, subprocess
+          import json, os, asyncio
           escolha=open("escolha.txt").read().strip()
-          print(f"Usando transcricao: {escolha}")
-          
+          print(f"Buscando transcricao para {escolha}")
           try:
-            dados=json.load(open("transcricoes.json"))
-            texto_es=dados.get(f"{escolha}_es") or dados.get(f"{escolha}_pt") or dados.get("top1_es")
-            if not texto_es:
-              raise Exception("sem transcricao")
+            dados=json.load(open("transcricoes.json", encoding="utf-8"))
+            # PEGA EXATAMENTE top1_es, top2_es, top3_es
+            key=f"{escolha}_es"
+            texto=dados.get(key)
+            if not texto:
+              # tenta sem _es
+              texto=dados.get(escolha)
+            if not texto:
+              texto=dados.get("top1_es","Hola amigos! Del 1 al 10 cuanto le dan a este trabajo?")
+            print(f"TEXTO ENCONTRADO {key}: {texto[:100]}")
           except Exception as e:
-            print(f"transcricoes.json erro: {e}")
-            texto_es="Hola amigos! Miren este trabajo increíble! Del 1 al 10 cuanto le dan?"
-
-          texto_es=texto_es.strip()[:350] # limite TTS
-          print(f"TEXTO PRA DUBLAR: {texto_es}")
-
-          async def dublar():
-            try:
-              import edge_tts
-              # Voz mexicana masculina obra - Jorge é a melhor pra construccion
-              voice="es-MX-JorgeNeural"
-              comm=edge_tts.Communicate(texto_es, voice, rate="-5%", volume="+20%")
-              await comm.save("/tmp/dub.mp3")
-              print(f"Dublado com {voice}")
-              return True
-            except Exception as e:
-              print(f"edge-tts falhou: {e}")
-              return False
-          
-          ok=asyncio.run(dublar())
-          if not ok:
-            from gtts import gTTS
-            gTTS(texto_es, lang='es', tld='com.mx').save("/tmp/dub.mp3")
-            print("Dublado com gTTS MX")
-
-          # Verifica se dub existe
-          if not os.path.exists("/tmp/dub.mp3") or os.path.getsize("/tmp/dub.mp3")<1000:
-            print("DUBLADO FALHOU - usando original")
-            subprocess.run(["cp","/tmp/original.mp4","/tmp/dublado.mp4"])
+            print(f"Erro transcricoes.json {e}")
+            texto="Hola amigos! Miren este trabajo increible! Del 1 al 10 cuanto le dan? Los leo en comentarios!"
+          texto=texto.strip()[:380]
+          async def dub():
+            import edge_tts
+            voice="es-MX-JorgeNeural"
+            # homem obra, devagar e forte
+            comm=edge_tts.Communicate(texto, voice, rate="-8%", pitch="+0Hz", volume="+25%")
+            await comm.save("/tmp/dub.mp3")
+          asyncio.run(dub())
+          print("DUB MP3 OK")
+          os.system('ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:a]volume=0.10[bg];[1:a]volume=1.8[voice];[bg][voice]amix=inputs=2:duration=longest:dropout_transition=0" -c:v copy -map 0:v -map 1:a -shortest /tmp/dublado.mp4 -loglevel error')
+          if os.path.exists("/tmp/dublado.mp4"):
+            os.system("cp /tmp/dublado.mp4 /tmp/original.mp4")
+            print("DUBLADO CORRETO")
           else:
-            # MISTURA: video original com musica baixa + voz dublada alta
-            cmd='ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:a]volume=0.12[bg];[1:a]volume=1.5[voice];[bg][voice]amix=inputs=2:duration=longest:dropout_transition=0" -c:v copy -map 0:v -map 1:a -shortest /tmp/dublado.mp4 || ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -c:v copy -c:a aac -shortest /tmp/dublado.mp4'
-            os.system(cmd)
-            if os.path.exists("/tmp/dublado.mp4"):
-              print(f"DUBLADO OK size {os.path.getsize('/tmp/dublado.mp4')}")
-              os.system("cp /tmp/dublado.mp4 /tmp/original.mp4")
-            else:
-              os.system("cp /tmp/original.mp4 /tmp/dublado.mp4")
-
-          # Salva legenda pro post usar mesmo texto
-          open("/tmp/legenda.txt","w", encoding="utf-8").write(texto_es)
+            print("FALHOU DUB, usando original")
+          open("/tmp/legenda.txt","w", encoding="utf-8").write(texto)
           PY
           python /tmp/dubla.py
 
-      - name: 2 - Converte 9:16 DUBLADO
+      - name: 2 - Converte 9:16
         run: |
           ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k /tmp/processed_reel.mp4
           ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg
-          ls -lh /tmp/*.mp4 /tmp/*.mp3 || true
+          ls -lh /tmp/processed_reel.mp4
 
       - name: 3 - INSTAGRAM
         env:
@@ -121,45 +110,43 @@ jobs:
         continue-on-error: true
         run: |
           cat > /tmp/ig.py << 'PY'
-          import os, json
+          import os
           from instagrapi import Client
-          legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:200] if os.path.exists("/tmp/legenda.txt") else "HOLA AMIGOS!"
-          caption=f"{legenda}\n\n¿Del 1 al 10? 👇\n\n#construccion #albanil #fcconstruye"
+          legenda=open("/tmp/legenda.txt", encoding="utf-8").read()
+          caption=f"{legenda}\n\n¿Del 1 al 10? 👇\n\n#construccion #albanil #obra #fcconstruye #mexico"
           cl=Client()
-          try:
-            sess=os.getenv("IG_SESSIONID")
-            if sess: cl.login_by_sessionid(sess.strip())
-            else: cl.login(os.getenv("INSTAGRAM_USER"), os.getenv("INSTAGRAM_PASS"))
+          try: cl.login_by_sessionid(os.getenv("IG_SESSIONID").strip())
           except: cl.login(os.getenv("INSTAGRAM_USER"), os.getenv("INSTAGRAM_PASS"))
           cl.clip_upload("/tmp/processed_reel.mp4", caption, thumbnail="/tmp/thumb.jpg")
           print("INSTAGRAM OK DUBLADO")
           PY
           python /tmp/ig.py
 
-      - name: 4 - FACEBOOK REELS PERPETUO 3 FASES
+      - name: 4 - FACEBOOK FIX upload_url
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
         continue-on-error: true
         run: |
           cat > /tmp/fb.py << 'PY'
-          import os, requests, time, json
+          import os, requests, time
           page=os.getenv("FB_PAGE_ID").strip()
           token=os.getenv("FB_PAGE_TOKEN").strip()
-          legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:200] if os.path.exists("/tmp/legenda.txt") else "HOLA AMIGOS!"
+          legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:300]
           url=f"https://graph.facebook.com/v20.0/{page}/video_reels"
           r1=requests.post(url, data={"upload_phase":"start","access_token":token})
-          print(f"FB START {r1.status_code}: {r1.text[:1000]}")
+          print(f"START {r1.status_code}: {r1.text[:800]}")
           if r1.status_code!=200: exit(0)
-          vid=r1.json()["video_id"]
+          j=r1.json()
+          vid=j["video_id"]
+          upload_url=j["upload_url"]
           size=os.path.getsize("/tmp/processed_reel.mp4")
           with open("/tmp/processed_reel.mp4","rb") as f:
-            r2=requests.post(f"https://rupload.facebook.com/video-upload/v20.0/{vid}", headers={"Authorization":f"OAuth {token}","file_size":str(size)}, data=f)
-          print(f"FB UPLOAD {r2.status_code}")
-          time.sleep(3)
-          r3=requests.post(url, data={"upload_phase":"finish","video_id":vid,"description":legenda+" #construccion #fcconstruye","access_token":token})
-          print(f"FB FINISH {r3.status_code}: {r3.text[:1500]}")
-          print("FACEBOOK OK DUBLADO" if r3.status_code==200 else "FB FALHOU")
+            r2=requests.post(upload_url, headers={"Authorization":f"OAuth {token}","file_offset":"0","file_size":str(size)}, data=f)
+          print(f"UPLOAD {r2.status_code}: {r2.text[:800]}")
+          time.sleep(6)
+          r3=requests.post(url, data={"upload_phase":"finish","video_id":vid,"description":legenda+" #construccion","access_token":token})
+          print(f"FINISH {r3.status_code}: {r3.text[:1000]}")
           PY
           python /tmp/fb.py
 
@@ -176,20 +163,18 @@ jobs:
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaFileUpload
           cid=os.getenv("YT_CLIENT_ID").strip(); csec=os.getenv("YT_CLIENT_SECRET").strip(); rtok=os.getenv("YT_REFRESH_TOKEN").strip()
-          r=requests.post("https://oauth2.googleapis.com/token", data={"client_id":cid,"client_secret":csec,"refresh_token":rtok,"grant_type":"refresh_token"}).json()
-          access=r.get("access_token")
-          if not access: print(f"YT token erro {r}"); exit(0)
-          creds=Credentials(token=access, refresh_token=rtok, client_id=cid, client_secret=csec, token_uri="https://oauth2.googleapis.com/token")
+          tok=requests.post("https://oauth2.googleapis.com/token", data={"client_id":cid,"client_secret":csec,"refresh_token":rtok,"grant_type":"refresh_token"}).json()["access_token"]
+          creds=Credentials(token=tok, refresh_token=rtok, client_id=cid, client_secret=csec, token_uri="https://oauth2.googleapis.com/token")
           youtube=build("youtube","v3",credentials=creds)
-          legenda=open("/tmp/legenda.txt", encoding="utf-8").read() if os.path.exists("/tmp/legenda.txt") else "Construccion"
-          body={"snippet":{"title":legenda[:90]+" #shorts","description":legenda+"\n\n#construccion #shorts","categoryId":"27"},"status":{"privacyStatus":"public","selfDeclaredMadeForKids":False}}
+          legenda=open("/tmp/legenda.txt", encoding="utf-8").read()
+          body={"snippet":{"title":(legenda[:85]+" #shorts"),"description":legenda+"\n#construccion #shorts","categoryId":"27"},"status":{"privacyStatus":"public","selfDeclaredMadeForKids":False}}
           media=MediaFileUpload("/tmp/processed_reel.mp4", mimetype="video/mp4", resumable=True)
           res=youtube.videos().insert(part="snippet,status", body=body, media_body=media).execute()
-          print(f"YOUTUBE OK DUBLADO id {res['id']}")
+          print(f"YOUTUBE OK {res['id']}")
           PY
           python /tmp/yt.py
 
-      - name: 6 - TIKTOK AUTO REFRESH
+      - name: 6 - TIKTOK
         env:
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
@@ -199,25 +184,21 @@ jobs:
         run: |
           cat > /tmp/tt.py << 'PY'
           import os, requests
-          ck=os.getenv("TIKTOK_CLIENT_KEY").strip(); cs=os.getenv("TIKTOK_CLIENT_SECRET").strip(); rt=os.getenv("TIKTOK_REFRESH_TOKEN").strip()
-          token=os.getenv("TIKTOK_ACCESS_TOKEN","").strip()
-          # Tenta refresh
+          ck=os.getenv("TIKTOK_CLIENT_KEY").strip(); cs=os.getenv("TIKTOK_CLIENT_SECRET").strip(); rt=os.getenv("TIKTOK_REFRESH_TOKEN").strip(); token=os.getenv("TIKTOK_ACCESS_TOKEN","").strip()
           try:
-            r=requests.post("https://open.tiktokapis.com/v2/oauth/token/", data={"client_key":ck,"client_secret":cs,"grant_type":"refresh_token","refresh_token":rt}).json()
-            if "access_token" in r: token=r["access_token"]; print("TikTok token renovado")
+            rr=requests.post("https://open.tiktokapis.com/v2/oauth/token/", data={"client_key":ck,"client_secret":cs,"grant_type":"refresh_token","refresh_token":rt}).json()
+            if "access_token" in rr: token=rr["access_token"]; print("TOKEN RENOVADO")
           except: pass
-          legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:150] if os.path.exists("/tmp/legenda.txt") else "HOLA AMIGOS!"
-          init_url="https://open.tiktokapis.com/v2/post/publish/video/init/"
+          legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:150]
           headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"}
-          body={"post_info":{"title":legenda+" #construccion","privacy_level":"PUBLIC_TO_EVERYONE"},"source_info":{"source":"FILE_UPLOAD","video_size":os.path.getsize("/tmp/processed_reel.mp4"),"chunk_size":10000000,"total_chunk_count":1}}
-          r2=requests.post(init_url, headers=headers, json=body)
-          print(f"TikTok init {r2.status_code}: {r2.text[:1500]}")
-          if r2.status_code==200 and "upload_url" in r2.text:
+          body={"post_info":{"title":legenda,"privacy_level":"PUBLIC_TO_EVERYONE"},"source_info":{"source":"FILE_UPLOAD","video_size":os.path.getsize("/tmp/processed_reel.mp4"),"chunk_size":10000000,"total_chunk_count":1}}
+          r2=requests.post("https://open.tiktokapis.com/v2/post/publish/video/init/", headers=headers, json=body)
+          print(f"INIT {r2.status_code}: {r2.text[:1000]}")
+          if r2.status_code==200:
             up=r2.json()["data"]["upload_url"]
             size=os.path.getsize("/tmp/processed_reel.mp4")
-            with open("/tmp/processed_reel.mp4","rb") as f:
-              ru=requests.put(up, headers={"Content-Range":f"bytes 0-{size-1}/{size}"}, data=f)
-            print(f"TikTok upload {ru.status_code} - OK DUBLADO")
+            with open("/tmp/processed_reel.mp4","rb") as f: ru=requests.put(up, headers={"Content-Range":f"bytes 0-{size-1}/{size}"}, data=f)
+            print(f"UPLOAD {ru.status_code}")
           PY
           python /tmp/tt.py
 
@@ -225,5 +206,5 @@ jobs:
         run: |
           git config user.name "fc-bot"; git config user.email "bot@fc.com"
           git add historico_4redes.json || true
-          git commit -m "dublado $(date)" || true
+          git commit -m "post $(date)" || true
           git push || true
