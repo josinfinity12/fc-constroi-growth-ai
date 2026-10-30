@@ -73,7 +73,6 @@ jobs:
 
           VELOCIDADE_VIDEO = 1.25
 
-          # 1 - Detecta o que é o video original com Whisper
           print("Detectando tipo do video original...")
           try:
               import whisper
@@ -87,28 +86,26 @@ jobs:
 
           j = json.load(open("transcricoes.json", encoding="utf-8"))
 
-          # 2 - MATCH INTELIGENTE FACHADA vs COZINHA vs GAVETAS
           texto_es = ""
           chave = ""
 
-          if any(k in texto_orig for k in ["fachada", "muro", "trilliza", "trigêmea", "tijolo baiano", "arandela", "iluminação", "iluminacion", "torre"]):
+          if any(k in texto_orig for k in ["fachada", "muro", "trilliza", "trigêmea", "tijolo baiano", "arandela", "torre"]):
               chave = "top4_es"; texto_es = j.get("top4_es", "")
               print("=> DETECTADO: FACHADA -> usando top4_es")
-          elif any(k in texto_orig for k in ["gaveta", "alumínio", "aluminio", "cantoneira", "pu 40", "bordinha", "45 grau", "acabamento lateral"]):
+          elif any(k in texto_orig for k in ["gaveta", "aluminio", "cantoneira", "pu 40", "bordinha", "45 grau"]):
               chave = "top5_es"; texto_es = j.get("top5_es", "")
               print("=> DETECTADO: GAVETAS ALUMINIO -> usando top5_es")
-          elif any(k in texto_orig for k in ["cozinha", "cocina", "porcelanato", "repisa", "remetimiento", "fregadero", "mueble impermeable"]):
+          elif any(k in texto_orig for k in ["cozinha", "cocina", "porcelanato", "repisa", "remetimiento", "fregadero"]):
               chave = "top2_es"; texto_es = j.get("top2_es", "")
-              print("=> DETECTADO: COZINHA PORCELANATO -> usando top2_es")
-          elif any(k in texto_orig for k in ["closet", "clóset", "ropero", "termite", "salitre", "moho", "rinitis", "puerta caída"]):
+              print("=> DETECTADO: COZINHA -> usando top2_es")
+          elif any(k in texto_orig for k in ["closet", "ropero", "termite", "salitre", "moho", "rinitis"]):
               chave = "top3_es"; texto_es = j.get("top3_es", "")
               print("=> DETECTADO: CLOSET -> usando top3_es")
-          elif any(k in texto_orig for k in ["gabinete", "sobrante", "lavabo", "pasta automotiva", "sobrante de piso"]):
+          elif any(k in texto_orig for k in ["gabinete", "sobrante", "lavabo", "pasta automotiva"]):
               chave = "top1_es"; texto_es = j.get("top1_es", "")
               print("=> DETECTADO: GABINETE BANHO -> usando top1_es")
           
           if not texto_es:
-              # Fallback rodizio
               todas = [(k,v) for k,v in j.items() if k.endswith("_es") and isinstance(v,str) and len(v)>30]
               todas.sort()
               hist_file="historico_4redes.json"
@@ -116,9 +113,9 @@ jobs:
               except: hist=[]
               idx = len(hist) % len(todas) if todas else 0
               chave, texto_es = todas[idx]
-              print(f"=> NAO DETECTOU PALAVRAS, fallback rodizio {chave}")
+              print(f"=> FALLBACK rodizio {chave}")
 
-          print(f"FINAL ESCOLHIDO: {chave} - {texto_es[:120]}...")
+          print(f"FINAL ESCOLHIDO: {chave}")
 
           async def dub():
               import edge_tts
@@ -130,19 +127,19 @@ jobs:
           dur_veloz = dur_orig / VELOCIDADE_VIDEO
           factor = dur_dub / dur_veloz
           factor = max(0.5, min(2.0, factor))
-
-          print(f"Original {dur_orig:.1f}s | Dub {dur_dub:.1f}s | Veloz {dur_veloz:.1f}s | Factor {factor:.2f}")
+          print(f"Dur orig {dur_orig:.1f} dub {dur_dub:.1f} veloz {dur_veloz:.1f} factor {factor:.2f}")
 
           cmd = f'''ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex \
           "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v]; \
            [0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg]; \
            [1:a]atempo={factor},volume=2.0[voice]; \
-           [bg][voice]amix=inputs=2:duration=first:dropout_transition=0" \
+           [bg][voice]amix=inputs=2:duration=first" \
           -map "[v]" -map 1:a -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'''
           os.system(cmd)
           subprocess.run(f'ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg -loglevel error', shell=True)
           open("/tmp/legenda.txt","w", encoding="utf-8").write(texto_es[:400])
-          print(f"OK MATCH {chave} VELOZ {os.path.getsize('/tmp/processed_reel.mp4)} bytes")
+          size = os.path.getsize("/tmp/processed_reel.mp4")
+          print(f"OK MATCH {chave} VELOZ {size} bytes")
           PY
           python /tmp/dubla.py
           ls -lh /tmp/*.mp4
