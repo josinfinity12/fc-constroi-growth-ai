@@ -31,7 +31,7 @@ jobs:
           for upd in r.get("result",[]):
               post=upd.get("channel_post") or upd.get("message") or {}
               if "video" in post: file_ids.append(post["video"]["file_id"])
-          print(f"Videos no HD: {len(file_ids)}")
+          print(f"Videos no seu HD -1004272: {len(file_ids)}")
           if not file_ids: sys.exit(1)
           fid=random.choice(file_ids[-15:])
           fp=requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id":fid}).json()["result"]["file_path"]
@@ -39,29 +39,25 @@ jobs:
           open("/tmp/original.mp4","wb").write(requests.get(dl).content)
           escolha=random.choice(["top1","top2","top3"])
           open("escolha.txt","w").write(escolha)
-          print(f"OK {os.path.getsize('/tmp/original.mp4')/1024/1024:.1f} MB {escolha}")
+          print(f"BAIXADO {escolha} {os.path.getsize('/tmp/original.mp4')/1024/1024:.1f} MB")
           PY
           python /tmp/baixa.py
-      - name: 2. Prepara Reels 9:16 SEM OpenAI
+      - name: 2. Prepara Reels 9:16
         run: |
-          escolha=$(cat escolha.txt)
-          echo "Usando legenda $escolha com HOLA AMIGOS!"
           ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset ultrafast -c:a aac /tmp/processed_reel.mp4
-          ls -lh /tmp/processed_reel.mp4
-      - name: 3. POSTA @fc_construye
+      - name: 3. POSTA @fc_construye LATAM
         env:
           IG_USERNAME: ${{ secrets.IG_USERNAME_ES }}
           IG_PASSWORD: ${{ secrets.IG_PASSWORD_ES }}
         run: |
           cat > /tmp/postar.py << 'PY'
           import json, os; from instagrapi import Client
-          escolha=open("escolha.txt").read().strip()
-          dados=json.load(open("transcricoes.json"))
+          escolha=open("escolha.txt").read().strip(); dados=json.load(open("transcricoes.json"))
           texto_es=dados[f"{escolha}_es"]
           if not texto_es.upper().startswith("HOLA AMIGOS"): texto_es="HOLA AMIGOS! "+texto_es
-          caption=f"{texto_es[:280]}\n\n¿Lo harías en tu casa? 👇\n\n#construccion #fcconstruye"
+          caption=f"{texto_es[:280]}\n\n¿Lo harías en tu casa? 👇\n#construccion #fcconstruye"
           cl=Client(); cl.login(os.getenv("IG_USERNAME"), os.getenv("IG_PASSWORD"))
           cl.clip_upload("/tmp/processed_reel.mp4", caption)
-          print("POSTADO LATAM HD OK - SEM OPENAI")
+          print("POSTADO LATAM HD OK")
           PY
           python /tmp/postar.py
