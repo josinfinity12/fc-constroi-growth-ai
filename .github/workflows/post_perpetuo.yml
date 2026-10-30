@@ -1,4 +1,4 @@
-name: FC - FONTE - CORRIGIDO FINAL FB 400
+name: FC - FONTE - FINAL 3 REDES OK
 
 on:
   workflow_dispatch:
@@ -69,7 +69,7 @@ jobs:
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - DUBLAGEM ES
+      - name: 1.5 - DUBLAGEM ES com transcricoes.json
         run: |
           cat > /tmp/dubla.py << 'PY'
           import json, asyncio, os
@@ -90,7 +90,7 @@ jobs:
           PY
           python /tmp/dubla.py
 
-      - name: 2 - Converte 9:16 LEVE (fix FB 400)
+      - name: 2 - Converte 9:16 LEVE
         run: |
           ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4
           ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg
@@ -120,42 +120,41 @@ jobs:
           PY
           python /tmp/ig.py
 
-      - name: 4 - POSTA FACEBOOK (CORRIGIDO UPLOAD 400)
+      - name: 4 - POSTA FACEBOOK (CORRIGIDO SEM RUPLOAD)
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
         continue-on-error: true
         run: |
           cat > /tmp/fb.py << 'PY'
-          import os, requests, time
+          import os, requests
           page=os.getenv("FB_PAGE_ID").strip()
           token=os.getenv("FB_PAGE_TOKEN").strip()
           legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:300]
+          file_path="/tmp/processed_reel.mp4"
+          size=os.path.getsize(file_path)
+          print(f"FB DIRETO {size} bytes page {page}")
+
+          url=f"https://graph-video.facebook.com/v20.0/{page}/videos"
+          with open(file_path,"rb") as f:
+              r=requests.post(url, data={
+                  "description": legenda,
+                  "access_token": token
+              }, files={"source": f}, timeout=300)
+              print(f"STATUS {r.status_code}")
+              print(f"RESP {r.text[:2000]}")
+              if r.status_code==200 and "id" in r.text:
+                  print("FB OK VIA graph-video")
+                  exit(0)
           
-          url=f"https://graph.facebook.com/v20.0/{page}/video_reels"
-          r1=requests.post(url, data={"upload_phase":"start","access_token":token}).json()
-          print(f"FB START {r1}")
-          if "video_id" not in r1:
-              raise SystemExit(f"START falhou {r1}")
-          vid=r1["video_id"]
-          up_url=r1["upload_url"]
-          
-          size=os.path.getsize("/tmp/processed_reel.mp4")
-          print(f"Enviando {size} bytes...")
-          with open("/tmp/processed_reel.mp4","rb") as f:
-              data=f.read()
-              headers={"Authorization": f"OAuth {token}", "file_offset": "0"}
-              resp=requests.post(up_url, headers=headers, data=data)
-              print(f"UPLOAD {resp.status_code} {resp.text[:500]}")
-          
-          time.sleep(10)
-          r3=requests.post(url, data={
-              "upload_phase":"finish",
-              "video_id":vid,
-              "description":legenda,
-              "access_token":token
-          }).json()
-          print(f"FB FINISH {r3}")
+          print("Tentando fallback /video_reels")
+          url2=f"https://graph.facebook.com/v20.0/{page}/video_reels"
+          with open(file_path,"rb") as f:
+              r2=requests.post(url2, data={
+                  "description": legenda,
+                  "access_token": token
+              }, files={"video_file": f}, timeout=300)
+              print(f"STATUS2 {r2.status_code} {r2.text[:2000]}")
           PY
           python /tmp/fb.py
 
@@ -173,7 +172,6 @@ jobs:
           from googleapiclient.http import MediaFileUpload
           cid=os.getenv("YT_CLIENT_ID").strip(); csec=os.getenv("YT_CLIENT_SECRET").strip(); rtok=os.getenv("YT_REFRESH_TOKEN").strip()
           resp=requests.post("https://oauth2.googleapis.com/token", data={"client_id":cid,"client_secret":csec,"refresh_token":rtok,"grant_type":"refresh_token"}).json()
-          print(f"YT TOKEN {'ok' if 'access_token' in resp else resp}")
           creds=Credentials(token=resp["access_token"], refresh_token=rtok, client_id=cid, client_secret=csec, token_uri="https://oauth2.googleapis.com/token")
           youtube=build("youtube","v3",credentials=creds)
           legenda=open("/tmp/legenda.txt", encoding="utf-8").read()
