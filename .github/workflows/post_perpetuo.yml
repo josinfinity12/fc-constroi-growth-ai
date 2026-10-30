@@ -1,4 +1,4 @@
-name: FC - FONTE - CORRIGIDO COMPLETO
+name: FC - FONTE - CORRIGIDO FINAL FB 400
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
           pip install "instagrapi[video]" requests google-api-python-client google-auth google-auth-oauthlib telethon edge-tts -q
           sudo apt-get update && sudo apt-get install -y ffmpeg -q
 
-      - name: 1 - Baixa FC-FONTE via get_messages IDS (CORRIGIDO)
+      - name: 1 - Baixa FC-FONTE via get_messages IDS
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
@@ -44,7 +44,6 @@ jobs:
             entity=await client.get_entity(ch_id)
             print(f"CANAL OK: {entity.title}")
             vids=[]
-            # CORRECAO: busca por IDS (bot pode) e nao por limit (bot nao pode)
             for batch_start in range(1, 3000, 100):
               ids=list(range(batch_start, batch_start+100))
               try:
@@ -55,7 +54,7 @@ jobs:
               except: pass
               if len(vids)>=60: break
             print(f"Videos achados: {len(vids)}")
-            if not vids: raise SystemExit("Nenhum video no FC - FONTE. Verifica se o FC Fonte Bot é admin.")
+            if not vids: raise SystemExit("Nenhum video no FC - FONTE")
             disp=[v for v in vids if str(v.id) not in hist]
             if not disp:
               print("Reset historico"); disp=vids; hist.clear()
@@ -70,7 +69,7 @@ jobs:
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - DUBLAGEM ES com transcricoes.json
+      - name: 1.5 - DUBLAGEM ES
         run: |
           cat > /tmp/dubla.py << 'PY'
           import json, asyncio, os
@@ -91,9 +90,9 @@ jobs:
           PY
           python /tmp/dubla.py
 
-      - name: 2 - Converte 9:16
+      - name: 2 - Converte 9:16 LEVE (fix FB 400)
         run: |
-          ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k /tmp/processed_reel.mp4
+          ffmpeg -y -i /tmp/original.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4
           ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg
           ls -lh /tmp/*.mp4
 
@@ -108,7 +107,7 @@ jobs:
           import os
           from instagrapi import Client
           texto=open("/tmp/legenda.txt", encoding="utf-8").read()[:180]
-          caption=f"{texto}\n\n¿Del 1 al 10? 👇\n.\n#construccion #albanil #obra #fcconstruye"
+          caption=f"{texto}\n\n¿Del 1 al 10? 👇\n#construccion #fcconstruye"
           cl=Client(); cl.delay_range=[1,3]
           try:
             sid=os.getenv("IG_SESSIONID","").strip()
@@ -121,7 +120,7 @@ jobs:
           PY
           python /tmp/ig.py
 
-      - name: 4 - POSTA FACEBOOK (fix 400)
+      - name: 4 - POSTA FACEBOOK (CORRIGIDO UPLOAD 400)
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
@@ -129,19 +128,34 @@ jobs:
         run: |
           cat > /tmp/fb.py << 'PY'
           import os, requests, time
-          page=os.getenv("FB_PAGE_ID").strip(); token=os.getenv("FB_PAGE_TOKEN").strip()
+          page=os.getenv("FB_PAGE_ID").strip()
+          token=os.getenv("FB_PAGE_TOKEN").strip()
           legenda=open("/tmp/legenda.txt", encoding="utf-8").read()[:300]
+          
           url=f"https://graph.facebook.com/v20.0/{page}/video_reels"
           r1=requests.post(url, data={"upload_phase":"start","access_token":token}).json()
           print(f"FB START {r1}")
-          vid=r1["video_id"]; up_url=r1["upload_url"]
+          if "video_id" not in r1:
+              raise SystemExit(f"START falhou {r1}")
+          vid=r1["video_id"]
+          up_url=r1["upload_url"]
+          
           size=os.path.getsize("/tmp/processed_reel.mp4")
+          print(f"Enviando {size} bytes...")
           with open("/tmp/processed_reel.mp4","rb") as f:
-            res=requests.post(up_url, headers={"Authorization":f"OAuth {token}","file_offset":"0","file_size":str(size)}, data=f)
-            print(f"UPLOAD {res.status_code}")
-          time.sleep(8)
-          r3=requests.post(url, data={"upload_phase":"finish","video_id":vid,"description":legenda,"access_token":token})
-          print(f"FB FINISH {r3.text[:800]}")
+              data=f.read()
+              headers={"Authorization": f"OAuth {token}", "file_offset": "0"}
+              resp=requests.post(up_url, headers=headers, data=data)
+              print(f"UPLOAD {resp.status_code} {resp.text[:500]}")
+          
+          time.sleep(10)
+          r3=requests.post(url, data={
+              "upload_phase":"finish",
+              "video_id":vid,
+              "description":legenda,
+              "access_token":token
+          }).json()
+          print(f"FB FINISH {r3}")
           PY
           python /tmp/fb.py
 
@@ -159,7 +173,7 @@ jobs:
           from googleapiclient.http import MediaFileUpload
           cid=os.getenv("YT_CLIENT_ID").strip(); csec=os.getenv("YT_CLIENT_SECRET").strip(); rtok=os.getenv("YT_REFRESH_TOKEN").strip()
           resp=requests.post("https://oauth2.googleapis.com/token", data={"client_id":cid,"client_secret":csec,"refresh_token":rtok,"grant_type":"refresh_token"}).json()
-          print(f"YT TOKEN { 'ok' if 'access_token' in resp else resp}")
+          print(f"YT TOKEN {'ok' if 'access_token' in resp else resp}")
           creds=Credentials(token=resp["access_token"], refresh_token=rtok, client_id=cid, client_secret=csec, token_uri="https://oauth2.googleapis.com/token")
           youtube=build("youtube","v3",credentials=creds)
           legenda=open("/tmp/legenda.txt", encoding="utf-8").read()
