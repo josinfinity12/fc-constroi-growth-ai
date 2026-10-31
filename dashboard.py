@@ -1,6 +1,4 @@
-# FC CONSTRÓI • GROWTH AI v4.2 ESPANHOL + NACIONAL - Kiwify Vendas Curso Online BRASIL TODO + ESPANHOL - BASE SEU 1267 LINHAS 100% INTACTO
-# v4.2 ADICIONADO SEM DELETAR NADA DO SEU v4.1: moviepy + baixar reel real @fc_constroi temporal + montar video final ES MP4 9:16 pronto
-
+GROWTH AI v4.2 ESPANHOL + NACIONAL - Kiwify Vendas Curso Online BRASIL TODO + ESPANHOL
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -13,7 +11,6 @@ from io import BytesIO
 import requests
 import hashlib
 import subprocess
-# ===== UPGRADE v4.3 - PUXAR 3 REELS REAIS AUTO SEM COLAR URL =====
 def puxar_3_reels_reais_auto_instagram(canal="@fc_constroi", output_dir="/tmp"):
     """v4.3: Puxa 3 reels REAIS automaticamente do @fc_constroi via yt-dlp sem precisar colar URL"""
     import os, glob, subprocess
