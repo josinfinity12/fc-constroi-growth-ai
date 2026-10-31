@@ -59,7 +59,7 @@ def narrar_es_elevenlabs_gratis(texto_es, voz_id="pNInz6obpgDQGcFmaJgB", filenam
     except: return None, "erro"
 
 def extrair_filtros_sck(sck_full: str):
-    s=str(sck_full).lower(); plat="wix"; 
+    s=str(sck_full).lower(); plat="wix";
     if "instagram" in s: plat="instagram"
     elif "tiktok" in s: plat="tiktok"
     elif "kwai" in s: plat="kwai"
@@ -125,7 +125,7 @@ try:
     from streamlit_autorefresh import st_autorefresh; st_autorefresh(interval=5*60*1000, key="autorefresh_v445")
 except: pass
 now=datetime.now(ZoneInfo("America/Bahia"))
-st.markdown(f"""<div style="background: linear-gradient(90deg,#111 0%,#222 100%);color:white;padding:14px 22px;border-radius:10px;border-left:5px solid #00E676;"><b>FC CONSTRÓI • v4.4.5 BR PERPÉTUO + ES DUBLADO/LEGENDADO SEPARADOS - 100% AUTO - TAB8 INTACTA</b><br><small style="color:#aaa">BR 07h/12h/19h + ES 08h/13h/20h Bahia - Workflow VERDE - {now.strftime('%d/%m/%Y %H:%M')} Irará-BA</small></div>""", unsafe_allow_html=True)
+st.markdown(f"""<div style="background: linear-gradient(90deg,#111 0%,#222 100%);color:white;padding:14px 22px;border-radius:10px;border-left:5px solid #00E676;">FC CONSTRÓI • v4.4.5 BR PERPÉTUO + ES DUBLADO/LEGENDADO SEPARADOS - 100% AUTO - TAB8 INTACTA<br><small style="color:#aaa">BR 07h/12h/19h + ES 08h/13h/20h Bahia - Workflow VERDE - {now.strftime('%d/%m/%Y %H:%M')} Irará-BA</small></div>""", unsafe_allow_html=True)
 tab_names=["🔥 BR PERPÉTUO - FILTROS AUTO","♻️ BR PERPÉTUO - Reciclar","📊 Dashboard","🖼️ Thumbnails","🎬 YouTube Pack","💰 CAC ROAS","💹 INVESTIMENTOS","💚 VENDAS INTACTA","🤖 BR Auto Loop","🌎 ES DUBLADO vs LEGENDADO - 2 PERPÉTUOS"]
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(tab_names)
 
@@ -194,14 +194,14 @@ with tab9:
     st.success("✅ BR PERPÉTUO Loop infinito - Gancho 3s + CTA reciclável Comenta GAVETA/PIA/BASE + SCK fb_nacional_*_organico - 100% AUTO")
     c1,c2=st.columns(2)
     with c1: st.time_input("BR 07h TOP1", value=pd.to_datetime("07:00").time(), key="loop_br_h1_v445"); st.time_input("BR 12h TOP2", value=pd.to_datetime("12:00").time(), key="loop_br_h2_v445"); st.time_input("BR 19h TOP3", value=pd.to_datetime("19:00").time(), key="loop_br_h3_v445")
-    with c2: st.metric("BR Próximo", "07:00 - Gaveta R$8mil - Gancho+CTA", "SCK fb_nacional_gaveta_organico"); 
+    with c2: st.metric("BR Próximo", "07:00 - Gaveta R$8mil - Gancho+CTA", "SCK fb_nacional_gaveta_organico");
     if st.button("🚀 ATIVAR BR PERPÉTUO LOOP", type="primary", key="ativar_br_v445"): st.success("BR PERPÉTUO ativado 07h/12h/19h - Gancho+CTA reciclável!"); st.balloons()
 
 with tab10:
     st.subheader("🌎 ES - 2 PERPÉTUOS SEPARADOS 100% AUTO - DUBLADO vs LEGENDADO")
     st.markdown("### 🚀 BR 07h/12h/19h + ES 08h/13h/20h Bahia - 3 perpétuos - SCKs separados - TAB8 INTACTA")
     tab_es_dub, tab_es_leg = st.tabs(["🎙️ ES DUBLADO PERPÉTUO - 08h/13h/20h - ElevenLabs", "📝 ES LEGENDADO PERPÉTUO - 08h/13h/20h - SRT queimada"])
-    
+ 
     with tab_es_dub:
         st.markdown("### 🎙️ ES DUBLADO - DUBLA áudio original PT->ES - ElevenLabs grátis - SCK es_doblado")
         st.info("Fluxo DUBLADO 100% AUTO: TOP3 BR -> Traduz gancho -> Narra ElevenLabs ES -> DUBLA vídeo 9:16 -> Legenda posts_auto/es_doblado/ -> SCK es_doblado_nacional_*_organico -> TAB8 INTACTA")
@@ -225,7 +225,7 @@ with tab10:
         st.markdown("---")
         st.markdown("**Exemplo legenda ES DUBLADO:**")
         st.code("¡ERROR de $8000 en gaveta! 95% cometen...\nComenta GAVETA te mando lista!\n📚 Curso: pay.kiwify.com.br/HiEJZtF?sck=es_doblado_nacional_gaveta_organico\n#porcelanato #fc_construye #cursoonline", language="text")
-    
+ 
     with tab_es_leg:
         st.markdown("### 📝 ES LEGENDADO - Vídeo original + legenda ES queimada SRT - SCK es_legendado")
         st.info("Fluxo LEGENDADO 100% AUTO: TOP3 BR -> Traduz -> Gera .SRT ES -> Queima legenda no vídeo 9:16 com moviepy -> posts_auto/es_legendado/ -> SCK es_legendado_nacional_*_organico -> TAB8 INTACTA")
