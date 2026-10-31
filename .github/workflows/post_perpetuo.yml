@@ -67,45 +67,77 @@ jobs:
           cat > /tmp/dubla.py << 'PY'
           import json, asyncio, os, subprocess, re
           from pathlib import Path
+
           def get_duration(p):
               r=subprocess.check_output(f'ffprobe -v error -show_entries format=duration -of json "{p}"', shell=True)
               return float(json.loads(r)['format']['duration'])
+
+          def atempo_filter(factor):
+              # resolve bug atempo >2.0
+              filters=[]
+              while factor > 2.0:
+                  filters.append("atempo=2.0")
+                  factor/=2.0
+              while factor < 0.5:
+                  filters.append("atempo=0.5")
+                  factor/=0.5
+              filters.append(f"atempo={factor}")
+              return ",".join(filters)
+
           VELOCIDADE_VIDEO = 1.25
+
           try:
               import whisper
               model = whisper.load_model("tiny")
               result = model.transcribe("/tmp/original.mp4", language="pt", fp16=False)
               texto_orig = result["text"].lower()
               print(f"TRANSCRITO PT: {texto_orig}")
-          except Exception as e: 
+          except Exception as e:
               print(f"Whisper erro {e}")
               texto_orig = ""
 
-          j = json.load(open("transcricoes.json", encoding="utf-8"))
+          try:
+              raw = open("transcricoes.json", encoding="utf-8").read()
+              raw = re.sub(r',\s*}', '}', raw)
+              raw = re.sub(r',\s*]', ']', raw)
+              j = json.loads(raw)
+              print(f"JSON OK - {len(j)} chaves")
+          except Exception as e:
+              print(f"ERRO JSON: {e}")
+              j = {
+                "top7_es": "Te enganaron con el MDF? Se hincha con la humedad.",
+                "top8_es": "Deja de gastar dinero con muebles que se inflan y se llenan de moho. Este closet es para toda la vida, inmune a cupim, termitas y fuego.",
+                "top1_es": "Gabinete de bano",
+                "top2_es": "Cocina porcelanato",
+                "top3_es": "Closet",
+                "top4_es": "Fachada",
+                "top5_es": "Gavetas",
+                "top6_es": ""
+              }
+
           texto_es = ""; chave = ""
 
-          # === MATCH INTELIGENTE CORRIGIDO - SEU BUG TOP7 vs TOP2 vs TOP8 ===
-          # Prioridade: palavras mais especificas primeiro
-          if any(k in texto_orig for k in ["guarda-roupa", "guarda roupa", "closet", "ropero", "wardrobe", "cupim", "mofo guarda"]):
+          # === FIX MATCH QUE CAUSOU SEU ERRO DA FOTO ===
+          # TOP8 TEM QUE VIR PRIMEIRO e com palavras do seu audio: guardar roupa, guarda roupa, imune, cupim, fogo
+          if any(k in texto_orig for k in ["guardar roupa", "guarda roupa", "guarda-roupa", "closet", "ropero", "wardrobe", "roupa", "cupim", "cupins", "termita", "inmune", "imune", "fogo"]):
               chave="top8_es"; texto_es=j.get("top8_es","")
-              print("MATCH -> TOP8 CLOSET (guarda-roupa)")
-          elif any(k in texto_orig for k in ["mdf", "estufa", "mofa armario", "inchado", "humedad mueble", "aglomerado"]):
+              print("MATCH -> TOP8 CLOSET (guardar roupa)")
+          elif any(k in texto_orig for k in ["mdf", "cocina mdf", "gabinete mdf", "cozinha mdf"]):
               chave="top7_es"; texto_es=j.get("top7_es","")
-              print("MATCH -> TOP7 MDF QUE INCHA")
+              print("MATCH -> TOP7 MDF COZINHA")
           elif any(k in texto_orig for k in ["fachada", "muro", "trilliza", "tijolo baiano", "arandela"]):
               chave="top4_es"; texto_es=j.get("top4_es","")
           elif any(k in texto_orig for k in ["gaveta", "aluminio", "cantoneira", "pu 40"]):
               chave="top5_es"; texto_es=j.get("top5_es","")
-          elif any(k in texto_orig for k in ["cozinha", "cocina", "repisa", "mesada"]): # top2 só se NÃO tem MDF
-              if "mdf" not in texto_orig:
-                  chave="top2_es"; texto_es=j.get("top2_es","")
-                  print("MATCH -> TOP2 COZINHA GERAL")
-          elif any(k in texto_orig for k in ["salitre", "termite", "humedad pared"]):
+          elif any(k in texto_orig for k in ["cozinha", "cocina", "repisa", "mesada"]) and "mdf" not in texto_orig:
+              chave="top2_es"; texto_es=j.get("top2_es","")
+          elif any(k in texto_orig for k in ["salitre", "humedad pared"]):
               chave="top3_es"; texto_es=j.get("top3_es","")
           elif any(k in texto_orig for k in ["gabinete", "sobrante", "lavabo"]):
               chave="top1_es"; texto_es=j.get("top1_es","")
 
           if not texto_es:
+              # se top6 vazio, nao usa
               todas=[(k,v) for k,v in j.items() if k.endswith("_es") and len(v)>30]; todas.sort()
               try: hist=json.load(open("historico_4redes.json"))
               except: hist=[]
@@ -115,35 +147,50 @@ jobs:
 
           print(f"ESCOLHIDO FINAL: {chave}")
 
-          # DUBLA
-          async def dub():
-              import edge_tts
-              await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="+15%",volume="+15%").save("/tmp/dub.mp3")
-          asyncio.run(dub())
+          # TOP6 SEM NARRAÇÃO
+          if chave == "top6_es" or not texto_es.strip():
+              print("TOP6 SEM NARRACAO - So acelera video original")
+              dur_orig=get_duration("/tmp/original.mp4")
+              dur_veloz=dur_orig/VELOCIDADE_VIDEO
+              cmd=f'ffmpeg -y -i /tmp/original.mp4 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v];[0:a]atempo={VELOCIDADE_VIDEO}[a]" -map "[v]" -map "[a]" -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'
+              os.system(cmd)
+              open("/tmp/legenda.txt","w", encoding="utf-8").write("Mueble eterno de porcelanato #construccion")
+          else:
+              async def dub():
+                  import edge_tts
+                  await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="+15%",volume="+15%").save("/tmp/dub.mp3")
+              asyncio.run(dub())
 
-          # GERA SRT AMARELA - 7 palavras por linha
-          palavras = texto_es.split()
-          srt = ""
-          t = 0
-          for i in range(0, len(palavras), 7):
-              chunk = " ".join(palavras[i:i+7])
-              # Escapa caracteres especiais SRT
-              srt += f"{i//7+1}\n00:00:{t//60:02d}:{t%60:02d},000 --> 00:00:{(t+2)//60:02d}:{(t+2)%60:02d},000\n{chunk}\n\n"
-              t+=2
-          Path("/tmp/legenda.srt").write_text(srt, encoding="utf-8")
-          open("/tmp/legenda.txt","w", encoding="utf-8").write(texto_es[:400])
+              palavras = texto_es.split()
+              srt = ""
+              t = 0
+              for i in range(0, len(palavras), 7):
+                  chunk = " ".join(palavras[i:i+7])
+                  chunk = chunk.replace("'", "").replace('"', "")
+                  srt += f"{i//7+1}\n00:00:{t//60:02d}:{t%60:02d},000 --> 00:00:{(t+2)//60:02d}:{(t+2)%60:02d},000\n{chunk}\n\n"
+                  t+=2
+              Path("/tmp/legenda.srt").write_text(srt, encoding="utf-8")
+              open("/tmp/legenda.txt","w", encoding="utf-8").write(texto_es[:400])
 
-          dur_orig=get_duration("/tmp/original.mp4"); dur_dub=get_duration("/tmp/dub.mp3")
-          dur_veloz=dur_orig/VELOCIDADE_VIDEO; factor=max(0.5,min(2.0,dur_dub/dur_veloz))
+              dur_orig=get_duration("/tmp/original.mp4"); dur_dub=get_duration("/tmp/dub.mp3")
+              dur_veloz=dur_orig/VELOCIDADE_VIDEO; factor=max(0.5,min(2.0,dur_dub/dur_veloz))
+              atempo = atempo_filter(factor)
 
-          # FFMPEG COM LEGENDA AMARELA QUEIMADA
-          # PrimaryColour=&H0000FFFF = AMARELO / Outline preto 4px / Fonte 22
-          legenda_style = "FontName=Arial Black,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,Outline=4,Shadow=1,Bold=1,MarginV=45,Alignment=2"
+              # LEGENDA AMARELA - FIX sem caracteres especiais que quebravam seu ffmpeg
+              legenda_style = "FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H0000FFFF,OutlineColour=&H000000,Outline=4,Shadow=1,Bold=1,MarginV=50,Alignment=2"
 
-          cmd=f'''ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=/tmp/legenda.srt:force_style='{legenda_style}'[v];[0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg];[1:a]atempo={factor},volume=2.0[voice];[bg][voice]amix=inputs=2:duration=first" -map "[v]" -map 1:a -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'''
-          os.system(cmd)
+              cmd=f'ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=/tmp/legenda.srt:force_style=\'{legenda_style}\'[v];[0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg];[1:a]{atempo},volume=2.0[voice];[bg][voice]amix=inputs=2:duration=first" -map "[v]" -map "[voice]" -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'
+              print(f"CMD: {cmd[:500]}")
+              ret = os.system(cmd)
+              print(f"FFMPEG RET: {ret}")
+              # fallback se legenda falhar
+              if not os.path.exists("/tmp/processed_reel.mp4"):
+                  print("Fallback sem legenda")
+                  cmd2=f'ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v];[0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg];[1:a]{atempo},volume=2.0[voice];[bg][voice]amix=inputs=2:duration=first" -map "[v]" -map "[voice]" -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error'
+                  os.system(cmd2)
+
           subprocess.run(f'ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg -loglevel error', shell=True)
-          print(f"OK VELOZ COM LEGENDA AMARELA {os.path.getsize('/tmp/processed_reel.mp4')} bytes - {chave}")
+          print(f"OK VELOZ {os.path.getsize('/tmp/processed_reel.mp4')} bytes - {chave}")
           PY
           python /tmp/dubla.py
 
