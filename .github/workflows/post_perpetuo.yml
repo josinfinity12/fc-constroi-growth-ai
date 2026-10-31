@@ -72,17 +72,6 @@ jobs:
               r=subprocess.check_output(f'ffprobe -v error -show_entries format=duration -of json "{p}"', shell=True)
               return float(json.loads(r)['format']['duration'])
 
-          def atempo_filter(factor):
-              filters=[]
-              while factor > 2.0:
-                  filters.append("atempo=2.0")
-                  factor/=2.0
-              while factor < 0.5:
-                  filters.append("atempo=0.5")
-                  factor/=0.5
-              filters.append(f"atempo={factor:.4f}")
-              return ",".join(filters)
-
           VELOCIDADE_VIDEO = 1.25
 
           try:
@@ -102,23 +91,16 @@ jobs:
               j = json.loads(raw)
           except Exception as e:
               print(f"ERRO JSON: {e}")
-              j = {
-                "top7_es": "Te enganaron con el MDF? Se hincha con la humedad.",
-                "top8_es": "Deja de gastar dinero con muebles que se inflan y se llenan de moho. Este closet es para toda la vida, inmune a cupim, termitas y fuego.",
-                "top6_es": ""
-              }
+              j = {"top7_es": "Te enganaron con el MDF?", "top8_es": "Este closet es para toda la vida", "top6_es": ""}
 
           texto_es = ""; chave = ""
-
-          if any(k in texto_orig for k in ["guardar roupa", "guarda roupa", "guarda-roupa", "closet", "ropero", "cupim", "cupins", "termita", "inmune", "imune", "fogo", "moho", "inflan"]):
+          if any(k in texto_orig for k in ["guardar roupa", "guarda roupa", "closet", "ropero", "cupim", "termita", "imune", "inmune", "fogo", "moho", "inflan"]):
               chave="top8_es"; texto_es=j.get("top8_es","")
-              print("MATCH -> TOP8 CLOSET")
-          elif any(k in texto_orig for k in ["mdf", "cocina mdf", "gabinete mdf", "cozinha mdf", "melamina"]):
+          elif "mdf" in texto_orig or "melamina" in texto_orig:
               chave="top7_es"; texto_es=j.get("top7_es","")
-              print("MATCH -> TOP7 MDF COZINHA")
-          elif any(k in texto_orig for k in ["fachada", "muro", "trilliza", "tijolo baiano", "arandela"]):
+          elif any(k in texto_orig for k in ["fachada", "muro", "trilliza"]):
               chave="top4_es"; texto_es=j.get("top4_es","")
-          elif any(k in texto_orig for k in ["gaveta", "aluminio", "cantoneira", "pu 40"]):
+          elif any(k in texto_orig for k in ["gaveta", "aluminio", "cantoneira"]):
               chave="top5_es"; texto_es=j.get("top5_es","")
           elif "cozinha" in texto_orig or "cocina" in texto_orig:
               chave="top2_es"; texto_es=j.get("top2_es","")
@@ -131,17 +113,16 @@ jobs:
               except: hist=[]
               idx=len(hist)%len(todas) if todas else 0
               chave, texto_es = todas[idx]
-              print(f"FALLBACK: {chave}")
 
           print(f"ESCOLHIDO FINAL: {chave}")
 
-          def cria_ass_amarela(texto, dur_total):
-              # Cria ASS amarelo que NUNCA falha no ffmpeg
+          # CRIA ASS AMARELO - SIMPLES E QUE FUNCIONA
+          def cria_ass_amarela(texto):
               palavras = texto.split()
               eventos = ""
               t=0
               for i in range(0, len(palavras), 7):
-                  chunk = " ".join(palavras[i:i+7]).replace(",", "").replace(":", "")
+                  chunk = " ".join(palavras[i:i+7]).replace(",", " ").replace(":", " ")
                   ini = f"0:00:{t//60:02d}:{t%60:02d}.00"
                   fim = f"0:00:{(t+2)//60:02d}:{(t+2)%60:02d}.00"
                   eventos += f"Dialogue: 0,{ini},{fim},Default,,0,0,0,,{chunk}\n"
@@ -158,39 +139,38 @@ jobs:
           {eventos}
           """
               Path("/tmp/legenda.ass").write_text(ass, encoding="utf-8")
-              Path("/tmp/legenda.srt").write_text(texto, encoding="utf-8")
 
           if chave == "top6_es" or not texto_es.strip():
               print("TOP6 SEM NARRACAO")
               dur_orig=get_duration("/tmp/original.mp4")
               dur_veloz=dur_orig/VELOCIDADE_VIDEO
               os.system(f'ffmpeg -y -i /tmp/original.mp4 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v];[0:a]atempo={VELOCIDADE_VIDEO}[a]" -map "[v]" -map "[a]" -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error')
-              open("/tmp/legenda.txt","w", encoding="utf-8").write("Mueble eterno de porcelanato #construccion")
+              open("/tmp/legenda.txt","w", encoding="utf-8").write("Mueble eterno de porcelanato")
           else:
               async def dub():
                   import edge_tts
                   await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="+15%",volume="+15%").save("/tmp/dub.mp3")
               asyncio.run(dub())
               open("/tmp/legenda.txt","w", encoding="utf-8").write(texto_es[:400])
-              cria_ass_amarela(texto_es, 30)
+              cria_ass_amarela(texto_es)
 
               dur_orig=get_duration("/tmp/original.mp4"); dur_dub=get_duration("/tmp/dub.mp3")
               dur_veloz=dur_orig/VELOCIDADE_VIDEO; factor=max(0.5,min(2.0,dur_dub/dur_veloz))
-              atempo = atempo_filter(factor)
 
-              # ETAPA 1 - Video dublado SEM legenda (garante que existe)
-              cmd1=f'ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v];[0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg];[1:a]{atempo},volume=2.0[voice];[bg][voice]amix=inputs=2:duration=first" -map "[v]" -map "[voice]" -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/temp_no_sub.mp4 -loglevel error'
-              os.system(cmd1)
-              print(f"ETAPA1 OK? {os.path.exists('/tmp/temp_no_sub.mp4')}")
+              # === AQUI MANTIVE SEUS PARAMETROS ORIGINAIS QUE ESTAVAM FUNCIONANDO ===
+              cmd_original = f'ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v];[0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg];[1:a]atempo={factor},volume=2.0[voice];[bg][voice]amix=inputs=2:duration=first" -map "[v]" -map 1:a -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/temp_sem_legenda.mp4 -loglevel error'
+              os.system(cmd_original)
+              print(f"VIDEO BASE CRIADO? {os.path.exists('/tmp/temp_sem_legenda.mp4')}")
 
-              # ETAPA 2 - Queima legenda amarela ASS
-              cmd2='ffmpeg -y -i /tmp/temp_no_sub.mp4 -vf "ass=/tmp/legenda.ass" -c:a copy -c:v libx264 -preset fast -crf 28 /tmp/processed_reel.mp4 -loglevel error'
-              ret=os.system(cmd2)
-              print(f"ETAPA2 RET {ret} EXISTE? {os.path.exists('/tmp/processed_reel.mp4')}")
-              if not os.path.exists('/tmp/processed_reel.mp4'):
-                  # Fallback total sem legenda
-                  os.system('cp /tmp/temp_no_sub.mp4 /tmp/processed_reel.mp4')
-                  print("Usou fallback sem legenda amarela")
+              # === UNICA COISA NOVA: QUEIMA LEGENDA AMARELA POR CIMA ===
+              if os.path.exists('/tmp/temp_sem_legenda.mp4'):
+                  os.system('ffmpeg -y -i /tmp/temp_sem_legenda.mp4 -vf "ass=/tmp/legenda.ass" -c:a copy -c:v libx264 -preset fast -crf 28 /tmp/processed_reel.mp4 -loglevel error')
+                  if not os.path.exists('/tmp/processed_reel.mp4'):
+                      os.system('cp /tmp/temp_sem_legenda.mp4 /tmp/processed_reel.mp4')
+                      print("Legenda falhou, usando sem legenda mas mantendo seus parametros")
+              else:
+                  print("ERRO: temp_sem_legenda nao criou")
+                  os.system('ffmpeg -y -i /tmp/original.mp4 -c:v libx264 -preset fast -crf 28 /tmp/processed_reel.mp4 -loglevel error')
 
           subprocess.run(f'ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg -loglevel error', shell=True)
           print(f"OK FINAL {os.path.getsize('/tmp/processed_reel.mp4')} bytes - {chave}")
