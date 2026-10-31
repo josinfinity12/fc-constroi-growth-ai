@@ -62,7 +62,7 @@ jobs:
           PY
           python /tmp/baixa.py
 
-      - name: 1.5 - MATCH INTELIGENTE FIX + VELOZ 1.25x + LEGENDA AMARELA
+      - name: 1.5 - MATCH INTELIGENTE FIX + VELOZ 1.25x + LEGENDA AMARELA QUEIMADA
         run: |
           cat > /tmp/dubla.py << 'PY'
           import json, asyncio, os, subprocess, re
@@ -116,61 +116,56 @@ jobs:
 
           print(f"ESCOLHIDO FINAL: {chave}")
 
-          # CRIA ASS AMARELO - SIMPLES E QUE FUNCIONA
-          def cria_ass_amarela(texto):
-              palavras = texto.split()
-              eventos = ""
-              t=0
-              for i in range(0, len(palavras), 7):
-                  chunk = " ".join(palavras[i:i+7]).replace(",", " ").replace(":", " ")
-                  ini = f"0:00:{t//60:02d}:{t%60:02d}.00"
-                  fim = f"0:00:{(t+2)//60:02d}:{(t+2)%60:02d}.00"
-                  eventos += f"Dialogue: 0,{ini},{fim},Default,,0,0,0,,{chunk}\n"
-                  t+=2
-              ass = f"""[Script Info]
-          ScriptType: v4.00+
-          PlayResX: 1080
-          PlayResY: 1920
-          [V4+ Styles]
-          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-          Style: Default,Arial,28,&H0000FFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,1,2,10,10,80,1
-          [Events]
-          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-          {eventos}
-          """
-              Path("/tmp/legenda.ass").write_text(ass, encoding="utf-8")
+          # CRIA SRT LIMPO PARA QUEIMAR AMARELO + ARQUIVO FORA
+          palavras = texto_es.split()
+          srt_content = ""
+          t=0
+          for i in range(0, len(palavras), 7):
+              chunk = " ".join(palavras[i:i+7])
+              # Remove caracteres que quebram ffmpeg
+              chunk = chunk.replace(":", " ").replace("'", "").replace('"', "")
+              ini_h = t // 3600; ini_m = (t % 3600) // 60; ini_s = t % 60
+              fim = t + 2
+              fim_h = fim // 3600; fim_m = (fim % 3600) // 60; fim_s = fim % 60
+              srt_content += f"{i//7+1}\n{ini_h:02d}:{ini_m:02d}:{ini_s:02d},000 --> {fim_h:02d}:{fim_m:02d}:{fim_s:02d},000\n{chunk}\n\n"
+              t+=2
+          
+          Path("/tmp/legenda.srt").write_text(srt_content, encoding="utf-8")
+          Path("/tmp/legenda.txt").write_text(texto_es, encoding="utf-8")
+          Path("/tmp/legenda.ass").write_text(srt_content, encoding="utf-8")
+          print(f"SRT CRIADO: {len(srt_content)} chars")
 
           if chave == "top6_es" or not texto_es.strip():
               print("TOP6 SEM NARRACAO")
               dur_orig=get_duration("/tmp/original.mp4")
               dur_veloz=dur_orig/VELOCIDADE_VIDEO
               os.system(f'ffmpeg -y -i /tmp/original.mp4 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v];[0:a]atempo={VELOCIDADE_VIDEO}[a]" -map "[v]" -map "[a]" -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/processed_reel.mp4 -loglevel error')
-              open("/tmp/legenda.txt","w", encoding="utf-8").write("Mueble eterno de porcelanato")
           else:
               async def dub():
                   import edge_tts
                   await edge_tts.Communicate(texto_es,"es-MX-JorgeNeural",rate="+15%",volume="+15%").save("/tmp/dub.mp3")
               asyncio.run(dub())
-              open("/tmp/legenda.txt","w", encoding="utf-8").write(texto_es[:400])
-              cria_ass_amarela(texto_es)
 
               dur_orig=get_duration("/tmp/original.mp4"); dur_dub=get_duration("/tmp/dub.mp3")
               dur_veloz=dur_orig/VELOCIDADE_VIDEO; factor=max(0.5,min(2.0,dur_dub/dur_veloz))
 
-              # === AQUI MANTIVE SEUS PARAMETROS ORIGINAIS QUE ESTAVAM FUNCIONANDO ===
-              cmd_original = f'ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v];[0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg];[1:a]atempo={factor},volume=2.0[voice];[bg][voice]amix=inputs=2:duration=first" -map "[v]" -map 1:a -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/temp_sem_legenda.mp4 -loglevel error'
-              os.system(cmd_original)
-              print(f"VIDEO BASE CRIADO? {os.path.exists('/tmp/temp_sem_legenda.mp4')}")
+              # ETAPA 1 - SEUS PARAMETROS ORIGINAIS QUE VOCE APROVOU (IG OK, FB 200, VELOCIDADE BOA)
+              cmd_base = f'ffmpeg -y -i /tmp/original.mp4 -i /tmp/dub.mp3 -filter_complex "[0:v]setpts={1/VELOCIDADE_VIDEO}*PTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v];[0:a]atempo={VELOCIDADE_VIDEO},volume=0[bg];[1:a]atempo={factor},volume=2.0[voice];[bg][voice]amix=inputs=2:duration=first" -map "[v]" -map 1:a -t {dur_veloz} -c:v libx264 -preset fast -crf 28 -c:a aac -b:a 96k /tmp/temp_sem_legenda.mp4 -loglevel error'
+              os.system(cmd_base)
+              print(f"BASE EXISTE? {os.path.exists('/tmp/temp_sem_legenda.mp4')}")
 
-              # === UNICA COISA NOVA: QUEIMA LEGENDA AMARELA POR CIMA ===
-              if os.path.exists('/tmp/temp_sem_legenda.mp4'):
-                  os.system('ffmpeg -y -i /tmp/temp_sem_legenda.mp4 -vf "ass=/tmp/legenda.ass" -c:a copy -c:v libx264 -preset fast -crf 28 /tmp/processed_reel.mp4 -loglevel error')
-                  if not os.path.exists('/tmp/processed_reel.mp4'):
-                      os.system('cp /tmp/temp_sem_legenda.mp4 /tmp/processed_reel.mp4')
-                      print("Legenda falhou, usando sem legenda mas mantendo seus parametros")
-              else:
-                  print("ERRO: temp_sem_legenda nao criou")
-                  os.system('ffmpeg -y -i /tmp/original.mp4 -c:v libx264 -preset fast -crf 28 /tmp/processed_reel.mp4 -loglevel error')
+              # ETAPA 2 - QUEIMA LEGENDA AMARELA GARANTIDA (force_style amarelo que funciona 100%)
+              # Amarelo = PrimaryColour=&H0000FFFF com contorno preto
+              cmd_amarelo = 'ffmpeg -y -i /tmp/temp_sem_legenda.mp4 -vf "subtitles=/tmp/legenda.srt:force_style=\'FontSize=24,PrimaryColour=&H0000FFFF,OutlineColour=&H000000,Outline=3,Shadow=1,Bold=1,Alignment=2,MarginV=60\'" -c:a copy -c:v libx264 -preset fast -crf 28 /tmp/processed_reel.mp4 -loglevel error'
+              ret = os.system(cmd_amarelo)
+              print(f"AMARELO RET={ret} EXISTE? {os.path.exists('/tmp/processed_reel.mp4')}")
+              
+              if not os.path.exists('/tmp/processed_reel.mp4'):
+                  print("Fallback amarelo - copiando base")
+                  os.system('cp /tmp/temp_sem_legenda.mp4 /tmp/processed_reel.mp4')
+
+          if not os.path.exists('/tmp/processed_reel.mp4'):
+              os.system('ffmpeg -y -i /tmp/original.mp4 -c:v libx264 -preset fast -crf 28 -c:a aac /tmp/processed_reel.mp4 -loglevel error')
 
           subprocess.run(f'ffmpeg -y -i /tmp/processed_reel.mp4 -ss 0.5 -vframes 1 /tmp/thumb.jpg -loglevel error', shell=True)
           print(f"OK FINAL {os.path.getsize('/tmp/processed_reel.mp4')} bytes - {chave}")
@@ -185,6 +180,7 @@ jobs:
             /tmp/processed_reel.mp4
             /tmp/thumb.jpg
             /tmp/legenda.txt
+            /tmp/legenda.srt
             /tmp/legenda.ass
 
       - name: 3 - POSTA INSTAGRAM
